@@ -13,5 +13,3 @@ vms = {
     "vm6": "wss://computernewb.com/collab-vm/vm6",
     "vm7": "wss://computernewb.com/collab-vm/vm7",
 }
-
-noauth_name = "CVMSentry" #
