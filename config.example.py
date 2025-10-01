@@ -1,8 +1,9 @@
 credentials = {
-    "session_auth": "", # Supply session auth
+    "session_auth": "",
 }
 
-log_level = "DEBUG"
+log_level = "INFO"
+log_directory = "./logs"
 
 vms = {
     "vm1": "wss://computernewb.com/collab-vm/vm1",
@@ -12,4 +13,6 @@ vms = {
     "vm5": "wss://computernewb.com/collab-vm/vm5",
     "vm6": "wss://computernewb.com/collab-vm/vm6",
     "vm7": "wss://computernewb.com/collab-vm/vm7",
+    "vm8": "wss://computernewb.com/collab-vm/vm8",
+    "vm9": "wss://computernewb.com/collab-vm/vm9",
 }
