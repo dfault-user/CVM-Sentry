@@ -1,4 +1,5 @@
 from typing import List, Optional
+from enum import IntEnum
 
 def guac_decode(string: str) -> Optional[List[str]]:
     """Implementation of guacamole decoder
@@ -59,3 +60,14 @@ def guac_encode(*args: str) -> str:
     Example: guac_encode(\"chat\", \"hello\") -> \"4.chat,5.hello;\" """
 
     return f"{','.join(f'{len(arg)}.{arg}' for arg in args)};"
+
+class CollabVMState(IntEnum):
+    WS_CONNECTED = 0
+    VM_CONNECTED = 1
+    LOGGED_IN = 2
+
+class CollabVMRank(IntEnum):
+    UNREGISTERED = 0
+    REGISTERED = 1
+    ADMIN = 2
+    MOD = 3
