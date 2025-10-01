@@ -1,6 +1,5 @@
 from typing import List, Optional
-from enum import IntEnum
-from cvmlib import guac_decode, guac_encode
+from cvmlib import guac_decode, guac_encode, CollabVMRank, CollabVMState
 import config
 import os
 import websockets, asyncio
@@ -26,18 +25,6 @@ log.addHandler(stdout_handler)
 
 log.info(f"CVM-Sentry started")
 
-
-class CollabVMState(IntEnum):
-    WS_CONNECTED = 0
-    VM_CONNECTED = 1
-    LOGGED_IN = 2
-
-class CollabVMRank(IntEnum):
-    UNREGISTERED = 0
-    REGISTERED = 1
-    ADMIN = 2
-    MOD = 3
-
 users = {}
 vm_botuser = {}
 
@@ -52,6 +39,8 @@ def get_origin_from_ws_url(ws_url: str) -> str:
     is_wss = ws_url.startswith("wss:")
     return f"http{'s' if is_wss else ''}://{domain}/"
 
+async def send_chat_message(websocket, message: str):
+    await websocket.send(guac_encode("chat", message))
 
 async def connect(vm_name: str):
     if vm_name not in config.vms:
@@ -81,7 +70,7 @@ async def connect(vm_name: str):
                 case ["nop"]:
                     await websocket.send(guac_encode("nop"))
                     log.debug((f"({CollabVMState(STATE).name}) Received: {decoded}"))
-                case ["auth", "https://auth.collabvm.org"]:
+                case ["auth", config.auth_server]:
                     await asyncio.sleep(1)
                     await websocket.send(
                         guac_encode("login", config.credentials["session_auth"])
@@ -91,6 +80,7 @@ async def connect(vm_name: str):
                     log.debug((f"({CollabVMState(STATE).name} - {vm_name}) Connected"))
                 case ["login", "1"]:
                     STATE = CollabVMState.LOGGED_IN
+                    await send_chat_message(websocket, "RICHARD NIXON TO THE RESCUE")
                 case _:
                     if decoded is not None:
                         if decoded[0] in ("sync", "png", "flag", "turn", "size"):
@@ -123,6 +113,14 @@ async def connect(vm_name: str):
                                 log_file.seek(0)
                                 json.dump(log_data, log_file, indent=4)
                                 log_file.truncate()
+                            if config.commands["enabled"] and message.startswith(config.commands["prefix"]):
+                                command = message[len(config.commands["prefix"]):].strip().lower()
+                                match command:
+                                    case "whoami":
+                                        await send_chat_message(websocket, f"You are {user} with rank {users[vm_name].get(user, 'Unknown').name}.")
+                                    case "about":
+                                        await send_chat_message(websocket, "RICHARD NIXONTRON 4000")
+
                             continue
                         elif decoded[0] == "adduser":
                                 if STATE == CollabVMState.LOGGED_IN:
@@ -140,9 +138,18 @@ async def connect(vm_name: str):
                                     username = decoded[2]
                                     if username in users[vm_name]:
                                         del users[vm_name][username]
+                        elif decoded[0] == "rename":
+                                if STATE == CollabVMState.WS_CONNECTED and decoded[1:3] == ["0", "0"]:
+                                    log.debug(f"AUTHORITATIVE GUEST NAME!! {decoded[3]}")
+                                    ## SET CURRENT BOT NAME ##
+                                    vm_botuser[vm_name] = decoded[3]
+                                elif STATE == CollabVMState.LOGGED_IN and decoded[2] in vm_botuser[vm_name]:
+                                    log.debug(f"AUTHORITATIVE BOT NAME CHANGE!! {decoded[3]}")
+                                    ## SET CURRENT BOT NAME ##
+                                    vm_botuser[vm_name] = decoded[3]     
                     log.debug(
                         (
-                            f"({CollabVMState(STATE).name} - {vm_name}) Received: {decoded}"
+                            f"({CollabVMState(STATE).name} - {vm_name}) Received unfiltered: {decoded}"
                         )
                     )
 
