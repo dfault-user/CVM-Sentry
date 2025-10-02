@@ -174,8 +174,20 @@ for vm in config.vms.keys():
 
     def start_vm_thread(vm_name: str):
         asyncio.run(connect(vm_name))
+
     async def main():
-        tasks = [connect(vm) for vm in config.vms.keys()]
+        async def connect_with_reconnect(vm_name: str):
+            while True:
+                try:
+                    await connect(vm_name)
+                except websockets.exceptions.ConnectionClosedError as e:
+                    log.warning(f"Connection to VM '{vm_name}' closed with error: {e}. Reconnecting...")
+                    await asyncio.sleep(5)  # Wait before attempting to reconnect
+                except websockets.exceptions.ConnectionClosedOK:
+                    log.warning(f"Connection to VM '{vm_name}' closed cleanly (code 1005). Reconnecting...")
+                    await asyncio.sleep(5)  # Wait before attempting to reconnect
+
+        tasks = [connect_with_reconnect(vm) for vm in config.vms.keys()]
         await asyncio.gather(*tasks)
 
     asyncio.run(main())
