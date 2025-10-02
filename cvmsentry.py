@@ -103,79 +103,72 @@ async def connect(vm_name: str):
                                 users[vm_name][new_name] = users[vm_name].pop(old_name)
                 case ["login", "1"]:
                     STATE = CollabVMState.LOGGED_IN
-                    await send_chat_message(websocket, "RICHARD NIXON TO THE RESCUE")
+                    #await send_chat_message(websocket, random.choice(config.autostart_messages))
+                case ["chat", user, message]:
+                    system_message = (user == "") 
+                    if system_message:
+                        continue
+                    log.info(f"[{vm_name} - {user}]: {message}")
+                    utc_now = datetime.now(timezone.utc)
+                    utc_day = utc_now.strftime("%Y-%m-%d")
+                    timestamp = utc_now.isoformat()
+                    
+                    with open(log_file_path, "r+") as log_file:
+                        try:
+                            log_data = json.load(log_file)
+                        except json.JSONDecodeError:
+                            log_data = {}
+
+                        if utc_day not in log_data:
+                            log_data[utc_day] = []
+
+                        log_data[utc_day].append({
+                            "timestamp": timestamp,
+                            "username": user,
+                            "message": message
+                        })
+
+                        log_file.seek(0)
+                        json.dump(log_data, log_file, indent=4)
+                        log_file.truncate()
+                    if config.commands["enabled"] and message.startswith(config.commands["prefix"]):
+                        command = message[len(config.commands["prefix"]):].strip().lower()
+                        match command:
+                            case "whoami":
+                                await send_chat_message(websocket, f"You are {user} with rank {users[vm_name][user]['rank'].name}.")
+                            case "about":
+                                await send_chat_message(websocket, config.responses.get("about", "CVM-Sentry (NO RESPONSE CONFIGURED)"))
+                            case "dump":
+                                log.debug(f"{json.dumps(users)}")
+                case ["adduser", count, *list]:
+                    for i in range(int(count)):
+                        user = list[i * 2]
+                        rank = CollabVMRank(int(list[i * 2 + 1]))
+                        if user in users[vm_name]:
+                            users[vm_name][user]["rank"] = rank
+                            log.info(f"[{vm_name}] User '{user}' rank updated to {rank.name}.")
+                        else:
+                            users[vm_name][user] = {"rank": rank, "turn_active": False}
+                            log.info(f"[{vm_name}] User '{user}' connected with rank {rank.name}.")
+                case ["turn", _, "0"]:
+                    if STATE < CollabVMState.LOGGED_IN:
+                        continue
+                    log.debug(f"({STATE.name} - {vm_name}) Turn queue exhausted.")
+                case ["turn", turn_time, count, current_turn, *queue]:
+                    log.debug(f"({STATE.name} - {vm_name}) Turn queue updated: {queue} | Current turn: {current_turn} | Time left for current turn: {int(turn_time)//1000}s")
+                    for user in users[vm_name]:
+                        users[vm_name][user]["turn_active"] = (user == current_turn)
+                case ["remuser", count, *list]:
+                    for i in range(int(count)):
+                        username = list[i]
+                        if username in users[vm_name]:
+                            del users[vm_name][username]
+                            log.info(f"[{vm_name}] User '{username}' left.")
                 case _:
                     if decoded is not None:
-                        if decoded[0] in ("sync", "png", "flag", "turn", "size"):
+                        if decoded[0] in ("sync", "png", "flag", "size"):
                             continue
-                        elif decoded[0] == "chat":
-                            user = "System" if len(decoded[1]) == 0 else decoded[1]
-                            if user == "System" or STATE < CollabVMState.LOGGED_IN:
-                                continue
-                            message = decoded[2]
-                            log.info(f"[{vm_name} - {user}]: {message}")
-                            utc_now = datetime.now(timezone.utc)
-                            utc_day = utc_now.strftime("%Y-%m-%d")
-                            timestamp = utc_now.isoformat()
-                            
-                            with open(log_file_path, "r+") as log_file:
-                                try:
-                                    log_data = json.load(log_file)
-                                except json.JSONDecodeError:
-                                    log_data = {}
-
-                                if utc_day not in log_data:
-                                    log_data[utc_day] = []
-
-                                log_data[utc_day].append({
-                                    "timestamp": timestamp,
-                                    "username": user,
-                                    "message": message
-                                })
-
-                                log_file.seek(0)
-                                json.dump(log_data, log_file, indent=4)
-                                log_file.truncate()
-                            if config.commands["enabled"] and message.startswith(config.commands["prefix"]):
-                                command = message[len(config.commands["prefix"]):].strip().lower()
-                                match command:
-                                    case "whoami":
-                                        await send_chat_message(websocket, f"You are {user} with rank {users[vm_name].get(user, 'Unknown').name}.")
-                                    case "about":
-                                        await send_chat_message(websocket, "RICHARD NIXONTRON 4000")
-
-                            continue
-                        elif decoded[0] == "adduser":
-                                if STATE == CollabVMState.LOGGED_IN:
-                                    username = decoded[2]
-                                    rank = CollabVMRank(int(decoded[3]))
-                                    users[vm_name][username] = rank
-                                elif STATE < CollabVMState.LOGGED_IN:
-                                    initial_user_payload = decoded[2:]
-                                    for i in range(0, len(initial_user_payload), 2):
-                                        username = initial_user_payload[i]
-                                        rank = CollabVMRank(int(initial_user_payload[i + 1]))
-                                        users[vm_name][username] = rank
-                        elif decoded[0] == "remuser":
-                                if STATE == CollabVMState.LOGGED_IN:
-                                    username = decoded[2]
-                                    if username in users[vm_name]:
-                                        del users[vm_name][username]
-                        elif decoded[0] == "rename":
-                                if STATE == CollabVMState.WS_CONNECTED and decoded[1:3] == ["0", "0"]:
-                                    log.debug(f"AUTHORITATIVE GUEST NAME!! {decoded[3]}")
-                                    ## SET CURRENT BOT NAME ##
-                                    vm_botuser[vm_name] = decoded[3]
-                                elif STATE == CollabVMState.LOGGED_IN and decoded[2] in vm_botuser[vm_name]:
-                                    log.debug(f"AUTHORITATIVE BOT NAME CHANGE!! {decoded[3]}")
-                                    ## SET CURRENT BOT NAME ##
-                                    vm_botuser[vm_name] = decoded[3]     
-                    log.debug(
-                        (
-                            f"({CollabVMState(STATE).name} - {vm_name}) Received unfiltered: {decoded}"
-                        )
-                    )
-
+                        log.debug(f"({STATE.name} - {vm_name}) Unhandled message: {decoded}")
 for vm in config.vms.keys():
 
 
