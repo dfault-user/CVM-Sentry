@@ -22,8 +22,6 @@ log = logging.getLogger("cvmsentry")
 log.setLevel(LOG_LEVEL)
 log.addHandler(stdout_handler)
 
-log.info(f"CVM-Sentry started")
-
 users = {}
 vm_botuser = {}
 STATE = CollabVMState.WS_DISCONNECTED
@@ -64,8 +62,8 @@ async def connect(vm_name: str):
         origin=Origin(get_origin_from_ws_url(uri)),
         user_agent_header="cvmsentry/1 (https://git.nixlabs.dev/clair/cvmsentry)"
     ) as websocket:
-        log.info(f"Connected to VM '{vm_name}' at {uri}")
         STATE = CollabVMState.WS_CONNECTED
+        log.info(f"Connected to VM '{vm_name}' at {uri}")
         await send_guac(websocket, "rename", "")
         await send_guac(websocket, "connect", vm_name)
         if vm_name not in users:
@@ -103,11 +101,13 @@ async def connect(vm_name: str):
                 case ["login", "1"]:
                     STATE = CollabVMState.LOGGED_IN
                     #await send_chat_message(websocket, random.choice(config.autostart_messages))
-                case ["chat", user, message]:
+                case ["chat", user, message, *backlog]:
                     system_message = (user == "") 
                     if system_message:
                         continue
-                    log.info(f"[{vm_name} - {user}]: {message}")
+                    if not backlog:
+                        log.info(f"[{vm_name} - {user}]: {message}")
+                        
                     utc_now = datetime.now(timezone.utc)
                     utc_day = utc_now.strftime("%Y-%m-%d")
                     timestamp = utc_now.isoformat()
@@ -120,6 +120,18 @@ async def connect(vm_name: str):
 
                         if utc_day not in log_data:
                             log_data[utc_day] = []
+
+                        if backlog:
+                            for i in range(0, len(backlog), 2):
+                                backlog_user = backlog[i]
+                                backlog_message = backlog[i + 1]
+                                if not any(entry["message"] == backlog_message and entry["username"] == backlog_user for entry in log_data[utc_day]):
+                                    log.info(f"[{vm_name} - {backlog_user} (backlog)]: {backlog_message}")
+                                    log_data[utc_day].append({
+                                        "timestamp": timestamp,
+                                        "username": backlog_user,
+                                        "message": backlog_message
+                                    })
 
                         log_data[utc_day].append({
                             "timestamp": timestamp,
@@ -167,11 +179,14 @@ async def connect(vm_name: str):
                         if username in users[vm_name]:
                             del users[vm_name][username]
                             log.info(f"[{vm_name}] User '{username}' left.")
+                case ["sync", *args] | ["png", *args] | ["flag", *args] | ["size", *args]:
+                    continue
                 case _:
                     if decoded is not None:
-                        if decoded[0] in ("sync", "png", "flag", "size"):
-                            continue
                         log.debug(f"({STATE.name} - {vm_name}) Unhandled message: {decoded}")
+
+log.info(f"({STATE.name}) CVM-Sentry started")
+
 for vm in config.vms.keys():
 
     def start_vm_thread(vm_name: str):
