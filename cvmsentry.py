@@ -27,6 +27,7 @@ log.info(f"CVM-Sentry started")
 
 users = {}
 vm_botuser = {}
+STATE = CollabVMState.DISCONNECTED
 
 def get_origin_from_ws_url(ws_url: str) -> str:
     domain = (
@@ -43,6 +44,7 @@ async def send_chat_message(websocket, message: str):
     await websocket.send(guac_encode("chat", message))
 
 async def connect(vm_name: str):
+    global STATE
     if vm_name not in config.vms:
         log.error(f"VM '{vm_name}' not found in configuration.")
         return
