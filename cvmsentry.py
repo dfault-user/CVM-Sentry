@@ -1,5 +1,5 @@
 from typing import List, Optional
-from cvmlib import guac_decode, guac_encode, CollabVMRank, CollabVMState
+from cvmlib import guac_decode, guac_encode, CollabVMRank, CollabVMState, CollabVMClientRenameStatus
 import config
 import os
 import websockets, asyncio
