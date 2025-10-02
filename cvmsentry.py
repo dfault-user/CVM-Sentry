@@ -67,8 +67,8 @@ async def connect(vm_name: str):
     ) as websocket:
         log.info(f"Connected to VM '{vm_name}' at {uri}")
         STATE = CollabVMState.WS_CONNECTED
-        await websocket.send(guac_encode("rename", ""))
-        await websocket.send(guac_encode("connect", vm_name))
+        await send_guac(websocket, "rename", "")
+        await send_guac(websocket, "connect", vm_name)
         if vm_name not in users:
             users[vm_name] = {}
         # response = await websocket.recv()
@@ -76,16 +76,29 @@ async def connect(vm_name: str):
             decoded: Optional[List[str]] = guac_decode(str(message))
             match decoded:
                 case ["nop"]:
-                    await websocket.send(guac_encode("nop"))
-                    log.debug((f"({CollabVMState(STATE).name}) Received: {decoded}"))
+                    await send_guac(websocket, "nop")
                 case ["auth", config.auth_server]:
                     await asyncio.sleep(1)
-                    await websocket.send(
-                        guac_encode("login", config.credentials["session_auth"])
-                    )
-                case ["connect", "1", "1", "1", "0"]:
+                    await send_guac(websocket, "login", config.credentials["session_auth"])
+                case ["connect", *rest]:
                     STATE = CollabVMState.VM_CONNECTED
-                    log.debug((f"({CollabVMState(STATE).name} - {vm_name}) Connected"))
+                    connection_status = "Connected" if rest[0] == "1" else "Disconnected" if rest[0] == "2" else "Connected"
+                    turns_status = "Enabled" if rest[1] == "1" else "Disabled"
+                    votes_status = "Enabled" if rest[2] == "1" else "Disabled"
+                    uploads_status = "Enabled" if rest[3] == "1" else "Disabled"
+                    log.debug(f"({STATE.name} - {vm_name}) {connection_status} | Turns: {turns_status} | Votes: {votes_status} | Uploads: {uploads_status}")
+                case ["rename", *instructions]:
+                    match instructions:
+                        case ["0", status, new_name]:
+                            if CollabVMClientRenameStatus(int(status)) == CollabVMClientRenameStatus.SUCCEEDED:
+                                log.debug(f"({STATE.name} - {vm_name}) Bot rename on VM {vm_name}: {vm_botuser[vm_name]} -> {new_name}")
+                                vm_botuser[vm_name] = new_name
+                            else:
+                                log.debug(f"({STATE.name} - {vm_name}) Bot rename on VM {vm_name} failed with status {CollabVMClientRenameStatus(int(status)).name}")
+                        case ["1", old_name, new_name]:
+                            if old_name in users[vm_name]:
+                                log.debug(f"({STATE.name} - {vm_name}) User rename on VM {vm_name}: {old_name} -> {new_name}")
+                                users[vm_name][new_name] = users[vm_name].pop(old_name)
                 case ["login", "1"]:
                     STATE = CollabVMState.LOGGED_IN
                     await send_chat_message(websocket, "RICHARD NIXON TO THE RESCUE")
