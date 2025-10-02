@@ -26,7 +26,7 @@ log.info(f"CVM-Sentry started")
 
 users = {}
 vm_botuser = {}
-STATE = CollabVMState.DISCONNECTED
+STATE = CollabVMState.WS_DISCONNECTED
 
 def get_origin_from_ws_url(ws_url: str) -> str:
     domain = (
@@ -138,7 +138,11 @@ async def connect(vm_name: str):
                             case "about":
                                 await send_chat_message(websocket, config.responses.get("about", "CVM-Sentry (NO RESPONSE CONFIGURED)"))
                             case "dump":
-                                log.debug(f"{json.dumps(users)}")
+                                if user != "dfu":
+                                    await send_chat_message(websocket, "You do not have permission to use this command.")
+                                    continue
+                                log.debug(f"({STATE.name} - {vm_name}) Dumping user list for VM {vm_name}: {users[vm_name]}")
+                                await send_chat_message(websocket, f"Dumped user list to console.")
                 case ["adduser", count, *list]:
                     for i in range(int(count)):
                         user = list[i * 2]
