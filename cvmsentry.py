@@ -1,8 +1,7 @@
 from typing import List, Optional
 from cvmlib import guac_decode, guac_encode, CollabVMRank, CollabVMState, CollabVMClientRenameStatus
 import config
-import os
-import websockets, asyncio
+import os, random, websockets, asyncio
 from websockets import Subprotocol, Origin
 import logging
 import sys
