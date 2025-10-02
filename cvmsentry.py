@@ -45,6 +45,8 @@ async def send_chat_message(websocket, message: str):
 
 async def connect(vm_name: str):
     global STATE
+    global users
+    global vm_botuser
     if vm_name not in config.vms:
         log.error(f"VM '{vm_name}' not found in configuration.")
         return
