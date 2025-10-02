@@ -62,19 +62,34 @@ def guac_encode(*args: str) -> str:
     return f"{','.join(f'{len(arg)}.{arg}' for arg in args)};"
 
 class CollabVMState(IntEnum):
-    DISCONNECTED = -1
+    """Represents client connection states."""
+    WS_DISCONNECTED = -1
+    """WebSocket is disconnected."""
     WS_CONNECTED = 0
+    """WebSocket is connected."""
     VM_CONNECTED = 1
+    """Connected to the VM but not logged in."""
     LOGGED_IN = 2
+    """Authenticated with announced auth server."""
 
 class CollabVMRank(IntEnum):
-    UNREGISTERED = 0
-    REGISTERED = 1
-    ADMIN = 2
-    MOD = 3
+    """Represents user ranks."""
+    Unregistered = 0
+    """Represents an unregistered user."""
+    Registered = 1
+    """Represents a registered user."""
+    Admin = 2
+    """Represents an admin user."""
+    Mod = 3
+    """Represents a moderator user."""
 
 class CollabVMClientRenameStatus(IntEnum):
+    """Represents the status of a client rename attempt."""
     SUCCEEDED = 0
+    """The rename attempt was successful."""
     FAILED_TAKEN = 1
+    """The desired name is already taken."""
     FAILED_INVALID = 2
+    """The desired name is invalid."""
     FAILED_REJECTED = 3
+    """The rename attempt was authoritatively rejected."""
