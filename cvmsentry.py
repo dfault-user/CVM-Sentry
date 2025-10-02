@@ -171,7 +171,6 @@ async def connect(vm_name: str):
                         log.debug(f"({STATE.name} - {vm_name}) Unhandled message: {decoded}")
 for vm in config.vms.keys():
 
-
     def start_vm_thread(vm_name: str):
         asyncio.run(connect(vm_name))
 
