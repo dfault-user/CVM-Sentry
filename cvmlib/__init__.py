@@ -62,6 +62,7 @@ def guac_encode(*args: str) -> str:
     return f"{','.join(f'{len(arg)}.{arg}' for arg in args)};"
 
 class CollabVMState(IntEnum):
+    DISCONNECTED = -1
     WS_CONNECTED = 0
     VM_CONNECTED = 1
     LOGGED_IN = 2
@@ -71,3 +72,9 @@ class CollabVMRank(IntEnum):
     REGISTERED = 1
     ADMIN = 2
     MOD = 3
+
+class CollabVMClientRenameStatus(IntEnum):
+    SUCCEEDED = 0
+    FAILED_TAKEN = 1
+    FAILED_INVALID = 2
+    FAILED_REJECTED = 3
