@@ -71,6 +71,8 @@ async def connect(vm_name: str):
         await send_guac(websocket, "connect", vm_name)
         if vm_name not in users:
             users[vm_name] = {}
+        if vm_name not in vm_botuser:
+            vm_botuser[vm_name] = ""
         # response = await websocket.recv()
         async for message in websocket:
             decoded: Optional[List[str]] = guac_decode(str(message))
