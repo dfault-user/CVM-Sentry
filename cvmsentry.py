@@ -100,14 +100,14 @@ async def connect(vm_name: str):
                                 users[vm_name][new_name] = users[vm_name].pop(old_name)
                 case ["login", "1"]:
                     STATE = CollabVMState.LOGGED_IN
-                    #await send_chat_message(websocket, random.choice(config.autostart_messages))
+                    await send_chat_message(websocket, random.choice(config.autostart_messages))
                 case ["chat", user, message, *backlog]:
                     system_message = (user == "") 
                     if system_message:
                         continue
                     if not backlog:
                         log.info(f"[{vm_name} - {user}]: {message}")
-                        
+
                     utc_now = datetime.now(timezone.utc)
                     utc_day = utc_now.strftime("%Y-%m-%d")
                     timestamp = utc_now.isoformat()
