@@ -43,6 +43,9 @@ def get_origin_from_ws_url(ws_url: str) -> str:
 async def send_chat_message(websocket, message: str):
     await websocket.send(guac_encode("chat", message))
 
+async def send_guac(websocket, *args: str):
+    await websocket.send(guac_encode(*args))
+
 async def connect(vm_name: str):
     global STATE
     global users
