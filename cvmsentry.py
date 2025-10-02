@@ -41,6 +41,7 @@ def get_origin_from_ws_url(ws_url: str) -> str:
     return f"http{'s' if is_wss else ''}://{domain}/"
 
 async def send_chat_message(websocket, message: str):
+    log.debug(f"Sending chat message: {message}")
     await websocket.send(guac_encode("chat", message))
 
 async def send_guac(websocket, *args: str):
