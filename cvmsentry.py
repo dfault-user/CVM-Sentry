@@ -55,7 +55,6 @@ async def connect(vm_name: str):
         log.error(f"VM '{vm_name}' not found in configuration.")
         return
     uri = config.vms[vm_name]
-    STATE = None
     log_file_path = os.path.join(getattr(config, "log_directory", "logs"), f"{vm_name}.json")
     if not os.path.exists(log_file_path):
         with open(log_file_path, "w") as log_file:
