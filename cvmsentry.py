@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List
 from cvmlib import guac_decode, guac_encode, CollabVMRank, CollabVMState, CollabVMClientRenameStatus
 import config
 import os, random, websockets, asyncio
@@ -39,10 +39,10 @@ def get_origin_from_ws_url(ws_url: str) -> str:
 
 async def send_chat_message(websocket, message: str):
     log.debug(f"Sending chat message: {message}")
-    await websocket.send(guac_encode("chat", message))
+    await websocket.send(guac_encode(["chat", message]))
 
 async def send_guac(websocket, *args: str):
-    await websocket.send(guac_encode(*args))
+    await websocket.send(guac_encode(list(args)))
 
 async def connect(vm_name: str):
     global STATE
@@ -72,7 +72,7 @@ async def connect(vm_name: str):
             vm_botuser[vm_name] = ""
         # response = await websocket.recv()
         async for message in websocket:
-            decoded: Optional[List[str]] = guac_decode(str(message))
+            decoded: List[str] = guac_decode(str(message))
             match decoded:
                 case ["nop"]:
                     await send_guac(websocket, "nop")
