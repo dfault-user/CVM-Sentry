@@ -79,13 +79,14 @@ async def connect(vm_name: str):
                 case ["auth", config.auth_server]:
                     await asyncio.sleep(1)
                     await send_guac(websocket, "login", config.credentials["session_auth"])
-                case ["connect", *rest]:
-                    STATE = CollabVMState.VM_CONNECTED
-                    connection_status = "Connected" if rest[0] == "1" else "Disconnected" if rest[0] == "2" else "Connected"
-                    turns_status = "Enabled" if rest[1] == "1" else "Disabled"
-                    votes_status = "Enabled" if rest[2] == "1" else "Disabled"
-                    uploads_status = "Enabled" if rest[3] == "1" else "Disabled"
-                    log.debug(f"({STATE.name} - {vm_name}) {connection_status} | Turns: {turns_status} | Votes: {votes_status} | Uploads: {uploads_status}")
+                case ["connect", connection_status, turns_enabled, votes_enabled, uploads_enabled]:
+                    if connection_status == "1":
+                        STATE = CollabVMState.VM_CONNECTED
+                        log.info(f"Connected to VM '{vm_name}' successfully. Turns enabled: {bool(int(turns_enabled))}, Votes enabled: {bool(int(votes_enabled))}, Uploads enabled: {bool(int(uploads_enabled))}")
+                    else:
+                        log.error(f"Failed to connect to VM '{vm_name}'. Connection status: {connection_status}")
+                        STATE = CollabVMState.WS_DISCONNECTED
+                        await websocket.close()
                 case ["rename", *instructions]:
                     match instructions:
                         case ["0", status, new_name]:
