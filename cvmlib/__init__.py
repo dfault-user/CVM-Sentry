@@ -1,4 +1,19 @@
+# FUNCTIONAL IMPORTS
+import websockets, asyncio, logging, sys
+from typing import List, TypedDict
+
+log_format = logging.Formatter(
+    "[%(asctime)s:%(name)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
+)
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setFormatter(log_format)
+log = logging.getLogger("CollabVMLib")
+log.setLevel("INFO")
+log.addHandler(stdout_handler)
+
+# TYPE IMPORTS
 from enum import IntEnum
+from websockets import Subprotocol, Origin
 
 # ENUMS
 class CollabVMState(IntEnum):
@@ -36,6 +51,11 @@ class CollabVMClientRenameStatus(IntEnum):
     """The desired name is invalid."""
     FAILED_REJECTED = 3
     """The rename attempt was authoritatively rejected."""
+
+class CollabVMLibConnectionOptions(TypedDict):
+    WS_URL: str
+    NODE_ID: str
+    CREDENTIALS: str | None
 
 # GUACAMOLE
 def guac_encode(elements: list) -> str:
@@ -83,3 +103,26 @@ def guac_decode(instruction: str) -> list:
                 raise ValueError(f"Unexpected '{instruction[position]}' in guacamole instruction at character {position}")
     
     return elements
+
+# HELPER FUNCS
+
+def get_origin_from_ws_url(ws_url: str) -> str:
+    domain = (
+        ws_url.removeprefix("ws:")
+        .removeprefix("wss:")
+        .removeprefix("/")
+        .removeprefix("/")
+        .split("/", 1)[0]
+    )
+    is_wss = ws_url.startswith("wss:")
+    return f"http{'s' if is_wss else ''}://{domain}/"
+
+# HELPER FUNCS ASYNC
+async def send_chat_message(websocket, message: str):
+    log.debug(f"Sending chat message: {message}")
+    await websocket.send(guac_encode(["chat", message]))
+
+async def send_guac(websocket, *args: str):
+    await websocket.send(guac_encode(list(args)))
+
+log.info("CollabVMLib imported ...")
