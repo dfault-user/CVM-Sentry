@@ -14,11 +14,11 @@ LOG_LEVEL = getattr(config, "log_level", "INFO")
 if not os.path.exists("logs"):
     os.makedirs("logs")
 log_format = logging.Formatter(
-    "[%(asctime)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
+    "[%(asctime)s:%(name)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
 )
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(log_format)
-log = logging.getLogger("cvmsentry")
+log = logging.getLogger("CVMSentry")
 log.setLevel(LOG_LEVEL)
 log.addHandler(stdout_handler)
 
@@ -123,16 +123,17 @@ async def connect(vm_name: str):
                             log_data[utc_day] = []
 
                         if backlog:
-                            for i in range(0, len(backlog), 2):
-                                backlog_user = backlog[i]
-                                backlog_message = backlog[i + 1]
-                                if not any(entry["message"] == backlog_message and entry["username"] == backlog_user for entry in log_data[utc_day]):
-                                    log.info(f"[{vm_name} - {backlog_user} (backlog)]: {backlog_message}")
-                                    log_data[utc_day].append({
-                                        "timestamp": timestamp,
-                                        "username": backlog_user,
-                                        "message": backlog_message
-                                    })
+                            pass
+                            # for i in range(0, len(backlog), 2):
+                            #     backlog_user = backlog[i]
+                            #     backlog_message = backlog[i + 1]
+                            #     if not any(entry["message"] == backlog_message and entry["username"] == backlog_user for entry in log_data[utc_day]):
+                            #         log.info(f"[{vm_name} - {backlog_user} (backlog)]: {backlog_message}")
+                            #         log_data[utc_day].append({
+                            #             "timestamp": timestamp,
+                            #             "username": backlog_user,
+                            #             "message": backlog_message
+                            #         })
 
                         log_data[utc_day].append({
                             "timestamp": timestamp,
