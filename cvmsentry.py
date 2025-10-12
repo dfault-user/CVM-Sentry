@@ -105,10 +105,13 @@ async def periodic_snapshot_task():
                         method=6,
                     )
 
+                    # Get file size in kilobytes
+                    file_size_kb = os.path.getsize(snapshot_path) / 1024
+
                     # Update the hash for this VM
                     vm_data["last_frame_hash"] = current_hash
 
-                    log.info(f"Saved snapshot for VM '{vm_name}' to {snapshot_path}")
+                    log.info(f"Saved snapshot for VM '{vm_name}' to {snapshot_path} ({file_size_kb:.2f} KB)")
                 else:
                     log.warning(f"No framebuffer available for VM '{vm_name}'")
 
@@ -326,7 +329,7 @@ async def connect(vm_name: str):
                     # Create an image from the decoded data
                     image = Image.open(BytesIO(initial_frame_data))
 
-                    # Store the image in memory as a BytesIO object
+                    #  the image in memory as a BytesIO object
                     framebuffer = BytesIO()
                     image.save(framebuffer, format="JPEG")
                     framebuffer.seek(0)
@@ -334,9 +337,6 @@ async def connect(vm_name: str):
                     # Assign the in-memory framebuffer to the VM's dictionary
                     vms[vm_name]["framebuffer"] = framebuffer
                     framebuffer_size = framebuffer.getbuffer().nbytes
-                    log.info(
-                        f"({STATE.name} - {vm_name}) !!! WHOLE FRAME UPDATE !!! ({framebuffer_size} bytes)"
-                    )
                 case ["png", "0", "0", x, y, rect_b64]:
                     # Decode the base64 image data for the rectangle
                     rect_data = base64.b64decode(rect_b64)
@@ -363,9 +363,6 @@ async def connect(vm_name: str):
 
                         # Log the updated framebuffer size
                         framebuffer_size = framebuffer.getbuffer().nbytes
-                        log.debug(
-                            f"({STATE.name} - {vm_name}) Updated framebuffer size: {framebuffer_size} bytes"
-                        )
                     else:
                         continue
                 case ["turn", turn_time, count, current_turn, *queue]:
