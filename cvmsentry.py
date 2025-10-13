@@ -16,7 +16,7 @@ import json
 from io import BytesIO
 from PIL import Image
 import base64
-import hashlib
+import imagehash
 
 LOG_LEVEL = getattr(config, "log_level", "INFO")
 
@@ -66,6 +66,38 @@ async def periodic_snapshot_task():
             await asyncio.sleep(10)  # Wait 10 seconds
             log.debug("Running periodic framebuffer snapshot capture...")
 
+            for vm_name, vm_data in vms.items():
+                # Skip if VM doesn't have a framebuffer
+                if not vm_data.get("framebuffer"):
+                    continue
+
+                # Create directory structure if it doesn't exist
+                date_str = datetime.now().strftime("%b-%d-%Y")
+                snapshot_dir = os.path.join("logs", "webp", vm_name, date_str)
+                os.makedirs(snapshot_dir, exist_ok=True)
+
+                # Get current epoch timestamp
+                epoch_timestamp = int(datetime.now().timestamp())
+                filename = f"{epoch_timestamp}.webp"
+                filepath = os.path.join(snapshot_dir, filename)
+
+                # Create a hash of the framebuffer for comparison
+                framebuffer = vm_data["framebuffer"]
+                if not framebuffer:
+                    continue
+
+                # Calculate difference hash for the image
+                current_hash = str(imagehash.dhash(framebuffer))
+
+                # Only save if the framebuffer has changed since last snapshot
+                if current_hash != vm_data.get("last_frame_hash"):
+                    try:
+                        # Save as webp with good quality/size balance
+                        framebuffer.save(filepath, format="WEBP", quality=65, method=6)
+                        vm_data["last_frame_hash"] = current_hash
+                        log.debug(f"Saved snapshot of {vm_name} to {filepath}")
+                    except Exception as e:
+                        log.error(f"Failed to save snapshot for {vm_name}: {e}")
 
         except Exception as e:
             log.error(f"Error in periodic snapshot task: {e}")
@@ -214,7 +246,6 @@ async def connect(vm_name: str):
                                 "message": message,
                             }
                         )
-
                         log_file.seek(0)
                         json.dump(log_data, log_file, indent=4)
                         log_file.truncate()
@@ -241,7 +272,7 @@ async def connect(vm_name: str):
                             case "dump":
                                 if not admin_check(user):
                                     continue
-                                log.debug(
+                                log.info(
                                     f"({STATE.name} - {vm_name}) Dumping user list for VM {vm_name}: {vms[vm_name]['users']}"
                                 )
                                 await send_chat_message(
@@ -251,6 +282,7 @@ async def connect(vm_name: str):
                     for i in range(int(count)):
                         user = list[i * 2]
                         rank = CollabVMRank(int(list[i * 2 + 1]))
+                        
                         if user in vms[vm_name]["users"]:
                             vms[vm_name]["users"][user]["rank"] = rank
                             log.info(
@@ -279,9 +311,67 @@ async def connect(vm_name: str):
                     log.debug(f"({STATE.name} - {vm_name}) !!! Framebuffer size update: {width}x{height} !!!")
                     vms[vm_name]["size"] = (int(width), int(height))
                 case ["png", "0", "0", "0", "0", initial_frame_b64]:
-                    log.debug(f"({STATE.name} - {vm_name}) !!! Initial framebuffer received !!!")
+                    if STATE < CollabVMState.LOGGED_IN:
+                        try:
+                            log.debug(f"({STATE.name} - {vm_name}) !!! Initial framebuffer received !!!")
+                            image_data = base64.b64decode(initial_frame_b64)
+                            framebuffer = Image.open(BytesIO(image_data))
+                            vms[vm_name]["framebuffer"] = framebuffer
+                            log.debug(f"({STATE.name} - {vm_name}) Initial framebuffer loaded: {framebuffer.size}")
+                        except Exception as e:
+                            log.error(f"({STATE.name} - {vm_name}) Failed to process initial framebuffer: {e}")
+                    elif STATE >= CollabVMState.LOGGED_IN:
+                        try:
+                            image_data = base64.b64decode(initial_frame_b64)
+                            framebuffer = Image.open(BytesIO(image_data))
+                            
+                            # Get expected size from VM info
+                            expected_width, expected_height = vms[vm_name]["size"]
+                            
+                            # Ensure the framebuffer matches the expected size
+                            if framebuffer.size != (expected_width, expected_height) and expected_width > 0 and expected_height > 0:
+                                framebuffer = framebuffer.resize((expected_width, expected_height))
+
+                            vms[vm_name]["framebuffer"] = framebuffer
+                            
+                            log.debug(f"({STATE.name} - {vm_name}) Framebuffer updated: {framebuffer.size}")
+                        except Exception as e:
+                            log.error(f"({STATE.name} - {vm_name}) Failed to process framebuffer update: {e}")
                 case ["png", "0", "0", x, y, rect_b64]:
-                    pass
+                    
+                    if vms[vm_name]["framebuffer"] is not None:
+                        try:
+                            # Check if we have a framebuffer with the right size
+                            log.debug(f"({STATE.name} - {vm_name}) !!! Framebuffer rectangle update at ({x},{y}) !!!")
+                            expected_width, expected_height = vms[vm_name]["size"]
+                            if (vms[vm_name]["framebuffer"].size != (expected_width, expected_height) and 
+                                expected_width > 0 and expected_height > 0):
+                                log.warning(f"({STATE.name} - {vm_name}) Framebuffer size mismatch: "
+                                            f"expected {expected_width}x{expected_height}, got {vms[vm_name]['framebuffer'].size}")
+                                continue
+                            
+                            # Decode and paste the rectangle update
+                            x_pos, y_pos = int(x), int(y)
+                            rect_data = base64.b64decode(rect_b64)
+                            rect_img = Image.open(BytesIO(rect_data))
+                            
+                            # Create a copy of the framebuffer to work with
+                            framebuffer = vms[vm_name]["framebuffer"].copy()
+                            framebuffer.paste(rect_img, (x_pos, y_pos))
+                            
+                            # Verify the framebuffer size is consistent
+                            if rect_img.size[0] + x_pos > framebuffer.size[0] or rect_img.size[1] + y_pos > framebuffer.size[1]:
+                                log.warning(f"({STATE.name} - {vm_name}) Rectangle update would exceed framebuffer bounds: "
+                                            f"rect size {rect_img.size} at position ({x_pos},{y_pos}) exceeds framebuffer {framebuffer.size}")
+                                continue
+
+                            # Update the framebuffer
+                            vms[vm_name]["framebuffer"] = framebuffer
+                            
+                        except Exception as e:
+                            log.error(f"({STATE.name} - {vm_name}) Failed to process framebuffer rectangle update: {e}")
+                    else:
+                        log.debug(f"({STATE.name} - {vm_name}) Received rectangle update but framebuffer is not initialized")
                 case ["turn", turn_time, count, current_turn, *queue]:
                     if (
                         queue == vms[vm_name]["turn_queue"]
