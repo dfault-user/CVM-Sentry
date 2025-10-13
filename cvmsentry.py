@@ -24,7 +24,7 @@ LOG_LEVEL = getattr(config, "log_level", "INFO")
 if not os.path.exists("logs"):
     os.makedirs("logs")
 log_format = logging.Formatter(
-    "[%(asctime)s:%(name)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
+    "[%(asctime)s:%(name)s] %(levelname)s - %(message)s"
 )
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(log_format)
@@ -377,7 +377,6 @@ async def connect(vm_name: str):
                         queue == vms[vm_name]["turn_queue"]
                         and current_turn == vms[vm_name]["active_turn_user"]
                     ):
-                        # log.debug(f"({STATE.name} - {vm_name}) Incoming turn update matches the VM's state. Dropping update.")
                         continue
                     for user in vms[vm_name]["users"]:
                         vms[vm_name]["turn_queue"] = queue
@@ -385,6 +384,8 @@ async def connect(vm_name: str):
                             current_turn if current_turn != "" else None
                         )
                     if current_turn:
+                        log.info(f"[{vm_name}] It's now {current_turn}'s turn. Queue: {queue}")
+
                         utc_now = datetime.now(timezone.utc)
                         utc_day = utc_now.strftime("%Y-%m-%d")
                         timestamp = utc_now.isoformat()
@@ -410,9 +411,6 @@ async def connect(vm_name: str):
                             log_file.seek(0)
                             json.dump(log_data, log_file, indent=4)
                             log_file.truncate()
-                    # log.debug(
-                    #     f"({STATE.name} - {vm_name}) Turn update: turn_time={turn_time}, count={count}, current_turn={current_turn}, queue={queue}"
-                    # )
 
                 case ["remuser", count, *list]:
                     for i in range(int(count)):
