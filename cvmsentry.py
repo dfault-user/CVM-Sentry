@@ -61,59 +61,11 @@ async def send_guac(websocket, *args: str):
 async def periodic_snapshot_task():
     """Background task that saves VM framebuffers as snapshots in WEBP format."""
     log.info("Starting periodic snapshot task")
-
     while True:
         try:
             await asyncio.sleep(10)  # Wait 10 seconds
             log.debug("Running periodic framebuffer snapshot capture...")
 
-            # Save framebuffers for all VMs
-            timestamp = int(
-                datetime.now(timezone.utc).timestamp()
-            )  # Use Unix timestamp for filenames
-            current_day = datetime.now(timezone.utc).strftime("%b-%d-%Y")
-
-            for vm_name, vm_data in vms.items():
-                # Create snapshots directory for each VM, then by current day
-                snapshot_dir = os.path.join("logs", "webp", vm_name, current_day)
-                os.makedirs(snapshot_dir, exist_ok=True)
-
-                framebuffer = vm_data.get("framebuffer")
-                if framebuffer:
-                    framebuffer.seek(0)
-
-                    # Calculate hash of the framebuffer to detect duplicates
-                    framebuffer_data = framebuffer.getvalue()
-                    current_hash = hashlib.md5(framebuffer_data).hexdigest()
-
-                    # Check if this frame is the same as the last one
-                    if vm_data.get("last_frame_hash") == current_hash:
-                        log.debug(f"Skipping duplicate frame for VM '{vm_name}'")
-                        continue
-
-                    # Save the new frame
-                    framebuffer.seek(0)
-                    image = Image.open(framebuffer)
-                    snapshot_path = os.path.join(
-                        snapshot_dir, f"{vm_name}_{timestamp}.webp"
-                    )
-                    image.save(
-                        snapshot_path,
-                        format="WEBP",
-                        quality=65,
-                        optimize=True,
-                        method=6,
-                    )
-
-                    # Get file size in kilobytes
-                    file_size_kb = os.path.getsize(snapshot_path) / 1024
-
-                    # Update the hash for this VM
-                    vm_data["last_frame_hash"] = current_hash
-
-                    log.info(f"Saved snapshot for VM '{vm_name}' to {snapshot_path} ({file_size_kb:.2f} KB)")
-                else:
-                    log.warning(f"No framebuffer available for VM '{vm_name}'")
 
         except Exception as e:
             log.error(f"Error in periodic snapshot task: {e}")
@@ -133,6 +85,7 @@ async def connect(vm_name: str):
         "users": {},
         "framebuffer": None,
         "last_frame_hash": None,
+        "size": (0, 0),
     }
     uri = config.vms[vm_name]
     log_file_path = os.path.join(
@@ -322,49 +275,13 @@ async def connect(vm_name: str):
                     log.debug(
                         f"({STATE.name} - {vm_name}) Turn queue is naturally exhausted."
                     )
+                case ["size", "0", width, height]:
+                    log.debug(f"({STATE.name} - {vm_name}) !!! Framebuffer size update: {width}x{height} !!!")
+                    vms[vm_name]["size"] = (int(width), int(height))
                 case ["png", "0", "0", "0", "0", initial_frame_b64]:
-                    # Decode the base64 image data
-                    initial_frame_data = base64.b64decode(initial_frame_b64)
-
-                    # Create an image from the decoded data
-                    image = Image.open(BytesIO(initial_frame_data))
-
-                    #  the image in memory as a BytesIO object
-                    framebuffer = BytesIO()
-                    image.save(framebuffer, format="JPEG")
-                    framebuffer.seek(0)
-
-                    # Assign the in-memory framebuffer to the VM's dictionary
-                    vms[vm_name]["framebuffer"] = framebuffer
-                    framebuffer_size = framebuffer.getbuffer().nbytes
+                    log.debug(f"({STATE.name} - {vm_name}) !!! Initial framebuffer received !!!")
                 case ["png", "0", "0", x, y, rect_b64]:
-                    # Decode the base64 image data for the rectangle
-                    rect_data = base64.b64decode(rect_b64)
-
-                    # Create an image from the decoded rectangle data
-                    rect_image = Image.open(BytesIO(rect_data))
-
-                    # Update the in-memory framebuffer
-                    if vms[vm_name]["framebuffer"]:
-                        framebuffer = vms[vm_name]["framebuffer"]
-                        framebuffer.seek(0)
-                        framebuffer_image = Image.open(framebuffer)
-
-                        # Paste the rectangle onto the framebuffer at the specified coordinates
-                        framebuffer_image.paste(rect_image, (int(x), int(y)))
-
-                        # Save the updated framebuffer back to the in-memory BytesIO object
-                        framebuffer = BytesIO()
-                        framebuffer_image.save(framebuffer, format="JPEG")
-                        framebuffer.seek(0)
-
-                        # Update the VM's dictionary with the new framebuffer
-                        vms[vm_name]["framebuffer"] = framebuffer
-
-                        # Log the updated framebuffer size
-                        framebuffer_size = framebuffer.getbuffer().nbytes
-                    else:
-                        continue
+                    pass
                 case ["turn", turn_time, count, current_turn, *queue]:
                     if (
                         queue == vms[vm_name]["turn_queue"]
@@ -403,9 +320,9 @@ async def connect(vm_name: str):
                             log_file.seek(0)
                             json.dump(log_data, log_file, indent=4)
                             log_file.truncate()
-                    log.debug(
-                        f"({STATE.name} - {vm_name}) Turn update: turn_time={turn_time}, count={count}, current_turn={current_turn}, queue={queue}"
-                    )
+                    # log.debug(
+                    #     f"({STATE.name} - {vm_name}) Turn update: turn_time={turn_time}, count={count}, current_turn={current_turn}, queue={queue}"
+                    # )
 
                 case ["remuser", count, *list]:
                     for i in range(int(count)):
@@ -414,7 +331,7 @@ async def connect(vm_name: str):
                             del vms[vm_name]["users"][username]
                             log.info(f"[{vm_name}] User '{username}' left.")
                 case (
-                    ["flag", *args] | ["size", *args] | ["png", *args] | ["sync", *args]
+                    ["flag", *args] | ["png", *args] | ["sync", *args]
                 ):
                     continue
                 case _:
