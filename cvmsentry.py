@@ -17,15 +17,12 @@ from io import BytesIO
 from PIL import Image
 import base64
 import imagehash
-
 LOG_LEVEL = getattr(config, "log_level", "INFO")
 
 # Prepare logs
 if not os.path.exists("logs"):
     os.makedirs("logs")
-log_format = logging.Formatter(
-    "[%(asctime)s:%(name)s] %(levelname)s - %(message)s"
-)
+log_format = logging.Formatter("[%(asctime)s:%(name)s] %(levelname)s - %(message)s")
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(log_format)
 log = logging.getLogger("CVMSentry")
@@ -34,8 +31,6 @@ log.addHandler(stdout_handler)
 
 vms = {}
 vm_botuser = {}
-STATE = CollabVMState.WS_DISCONNECTED
-
 
 def get_origin_from_ws_url(ws_url: str) -> str:
     domain = (
@@ -95,9 +90,13 @@ async def periodic_snapshot_task():
                     # Create a copy of the image to avoid race conditions
                     img_copy = framebuffer.copy()
                     # Create and store task for asynchronous saving
-                    save_tasks.append(asyncio.create_task(
-                        save_image_async(img_copy, filepath, vm_name, vm_data, current_hash)
-                    ))
+                    save_tasks.append(
+                        asyncio.create_task(
+                            save_image_async(
+                                img_copy, filepath, vm_name, vm_data, current_hash
+                            )
+                        )
+                    )
 
             # Wait for all save tasks to complete
             if save_tasks:
@@ -107,16 +106,13 @@ async def periodic_snapshot_task():
             log.error(f"Error in periodic snapshot task: {e}")
             # Continue running even if there's an error
 
+
 async def save_image_async(image, filepath, vm_name, vm_data, current_hash):
     """Save an image to disk asynchronously."""
     try:
         # Run the image saving in a thread pool to avoid blocking
         await asyncio.to_thread(
-            image.save, 
-            filepath, 
-            format="WEBP", 
-            quality=65, 
-            method=6
+            image.save, filepath, format="WEBP", quality=65, method=6
         )
         vm_data["last_frame_hash"] = current_hash
         log.info(f"Saved snapshot of {vm_name} to {filepath}")
@@ -125,7 +121,7 @@ async def save_image_async(image, filepath, vm_name, vm_data, current_hash):
 
 
 async def connect(vm_name: str):
-    global STATE
+    STATE = CollabVMState.WS_DISCONNECTED
     global vms
     global vm_botuser
     if vm_name not in config.vms:
@@ -218,10 +214,9 @@ async def connect(vm_name: str):
                         )
                 case ["chat", user, message, *backlog]:
                     system_message = user == ""
-                    if system_message:
+                    if system_message or backlog:
                         continue
-                    if not backlog:
-                        log.info(f"[{vm_name} - {user}]: {message}")
+                    log.info(f"[{vm_name} - {user}]: {message}")
 
                     def get_rank(username: str) -> CollabVMRank:
                         return vms[vm_name]["users"].get(username, {}).get("rank")
@@ -245,8 +240,6 @@ async def connect(vm_name: str):
                         if utc_day not in log_data:
                             log_data[utc_day] = []
 
-                        if backlog:
-                            pass
                             # for i in range(0, len(backlog), 2):
                             #     backlog_user = backlog[i]
                             #     backlog_message = backlog[i + 1]
@@ -273,9 +266,8 @@ async def connect(vm_name: str):
                     if config.commands["enabled"] and message.startswith(
                         config.commands["prefix"]
                     ):
-                        command = (
-                            message[len(config.commands["prefix"]) :].strip().lower()
-                        )
+                        command_full = message[len(config.commands["prefix"]):].strip().lower()
+                        command = command_full.split(" ")[0] if " " in command_full else command_full
                         match command:
                             case "whoami":
                                 await send_chat_message(
@@ -302,7 +294,7 @@ async def connect(vm_name: str):
                     for i in range(int(count)):
                         user = list[i * 2]
                         rank = CollabVMRank(int(list[i * 2 + 1]))
-                        
+
                         if user in vms[vm_name]["users"]:
                             vms[vm_name]["users"][user]["rank"] = rank
                             log.info(
@@ -328,27 +320,35 @@ async def connect(vm_name: str):
                         f"({STATE.name} - {vm_name}) Turn queue is naturally exhausted."
                     )
                 case ["size", "0", width, height]:
-                    log.debug(f"({STATE.name} - {vm_name}) !!! Framebuffer size update: {width}x{height} !!!")
+                    log.debug(
+                        f"({STATE.name} - {vm_name}) !!! Framebuffer size update: {width}x{height} !!!"
+                    )
                     vms[vm_name]["size"] = (int(width), int(height))
                 case ["png", "0", "0", "0", "0", full_frame_b64]:
                     try:
-                        log.debug(f"({STATE.name} - {vm_name}) !!! Received full framebuffer update !!!")
+                        log.debug(
+                            f"({STATE.name} - {vm_name}) !!! Received full framebuffer update !!!"
+                        )
                         expected_width, expected_height = vms[vm_name]["size"]
-                        
+
                         # Decode the base64 data to get the PNG image
                         frame_data = base64.b64decode(full_frame_b64)
                         frame_img = Image.open(BytesIO(frame_data))
-                        
+
                         # Validate image size and handle partial frames
                         if expected_width > 0 and expected_height > 0:
                             if frame_img.size != (expected_width, expected_height):
-                                log.warning(f"({STATE.name} - {vm_name}) Partial framebuffer update: "
-                                           f"expected {expected_width}x{expected_height}, got {frame_img.size}")
-                                
+                                log.debug(
+                                    f"({STATE.name} - {vm_name}) Partial framebuffer update: "
+                                    f"expected {expected_width}x{expected_height}, got {frame_img.size}"
+                                )
+
                                 # Create a new image of expected size if no framebuffer exists
                                 if vms[vm_name]["framebuffer"] is None:
-                                    vms[vm_name]["framebuffer"] = Image.new('RGB', (expected_width, expected_height))
-                                
+                                    vms[vm_name]["framebuffer"] = Image.new(
+                                        "RGB", (expected_width, expected_height)
+                                    )
+
                                 # Only update the portion that was received
                                 if vms[vm_name]["framebuffer"]:
                                     # Create a copy of the current framebuffer to modify
@@ -357,26 +357,32 @@ async def connect(vm_name: str):
                                     updated_img.paste(frame_img, (0, 0))
                                     # Use this as our new framebuffer
                                     frame_img = updated_img
-                        
+
                         # Update the framebuffer with the new image
                         vms[vm_name]["framebuffer"] = frame_img
-                        log.debug(f"({STATE.name} - {vm_name}) Framebuffer updated with full frame, size: {frame_img.size}")
+                        log.debug(
+                            f"({STATE.name} - {vm_name}) Framebuffer updated with full frame, size: {frame_img.size}"
+                        )
                     except Exception as e:
-                        log.error(f"({STATE.name} - {vm_name}) Failed to process full framebuffer update: {e}")
+                        log.error(
+                            f"({STATE.name} - {vm_name}) Failed to process full framebuffer update: {e}"
+                        )
                 case ["png", "0", "0", x, y, rect_b64]:
                     try:
-                        log.debug(f"({STATE.name} - {vm_name}) Received partial framebuffer update at position ({x}, {y})")
+                        log.debug(
+                            f"({STATE.name} - {vm_name}) Received partial framebuffer update at position ({x}, {y})"
+                        )
                         x, y = int(x), int(y)
-                        
+
                         # Decode the base64 data to get the PNG image fragment
                         frame_data = base64.b64decode(rect_b64)
                         fragment_img = Image.open(BytesIO(frame_data))
-                        
+
                         # If we don't have a framebuffer yet or it's incompatible, create one
                         if vms[vm_name]["framebuffer"] is None:
                             # drop
                             continue
-                        
+
                         # If we have a valid framebuffer, update it with the fragment
                         if vms[vm_name]["framebuffer"]:
                             # Create a copy to modify
@@ -385,11 +391,17 @@ async def connect(vm_name: str):
                             updated_img.paste(fragment_img, (x, y))
                             # Update the framebuffer
                             vms[vm_name]["framebuffer"] = updated_img
-                            log.debug(f"({STATE.name} - {vm_name}) Updated framebuffer with fragment at ({x}, {y}), fragment size: {fragment_img.size}")
+                            log.debug(
+                                f"({STATE.name} - {vm_name}) Updated framebuffer with fragment at ({x}, {y}), fragment size: {fragment_img.size}"
+                            )
                         else:
-                            log.warning(f"({STATE.name} - {vm_name}) Cannot update framebuffer - no base framebuffer exists")
+                            log.warning(
+                                f"({STATE.name} - {vm_name}) Cannot update framebuffer - no base framebuffer exists"
+                            )
                     except Exception as e:
-                        log.error(f"({STATE.name} - {vm_name}) Failed to process partial framebuffer update: {e}")
+                        log.error(
+                            f"({STATE.name} - {vm_name}) Failed to process partial framebuffer update: {e}"
+                        )
                 case ["turn", turn_time, count, current_turn, *queue]:
                     if (
                         queue == vms[vm_name]["turn_queue"]
@@ -402,7 +414,9 @@ async def connect(vm_name: str):
                             current_turn if current_turn != "" else None
                         )
                     if current_turn:
-                        log.info(f"[{vm_name}] It's now {current_turn}'s turn. Queue: {queue}")
+                        log.info(
+                            f"[{vm_name}] It's now {current_turn}'s turn. Queue: {queue}"
+                        )
 
                         utc_now = datetime.now(timezone.utc)
                         utc_day = utc_now.strftime("%Y-%m-%d")
@@ -436,9 +450,7 @@ async def connect(vm_name: str):
                         if username in vms[vm_name]["users"]:
                             del vms[vm_name]["users"][username]
                             log.info(f"[{vm_name}] User '{username}' left.")
-                case (
-                    ["flag", *args] | ["png", *args] | ["sync", *args]
-                ):
+                case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
                 case _:
                     if decoded is not None:
@@ -447,7 +459,7 @@ async def connect(vm_name: str):
                         )
 
 
-log.info(f"({STATE.name}) CVM-Sentry started")
+log.info(f"CVM-Sentry started")
 
 for vm in config.vms.keys():
 
