@@ -63,9 +63,10 @@ async def periodic_snapshot_task():
     log.info("Starting periodic snapshot task")
     while True:
         try:
-            await asyncio.sleep(10)  # Wait 10 seconds
+            await asyncio.sleep(5)
             log.debug("Running periodic framebuffer snapshot capture...")
 
+            save_tasks = []
             for vm_name, vm_data in vms.items():
                 # Skip if VM doesn't have a framebuffer
                 if not vm_data.get("framebuffer"):
@@ -76,8 +77,8 @@ async def periodic_snapshot_task():
                 snapshot_dir = os.path.join("logs", "webp", vm_name, date_str)
                 os.makedirs(snapshot_dir, exist_ok=True)
 
-                # Get current epoch timestamp
-                epoch_timestamp = int(datetime.now().timestamp())
+                # Get current epoch timestamp in milliseconds
+                epoch_timestamp = int(datetime.now().timestamp() * 1000)
                 filename = f"{epoch_timestamp}.webp"
                 filepath = os.path.join(snapshot_dir, filename)
 
@@ -91,17 +92,36 @@ async def periodic_snapshot_task():
 
                 # Only save if the framebuffer has changed since last snapshot
                 if current_hash != vm_data.get("last_frame_hash"):
-                    try:
-                        # Save as webp with good quality/size balance
-                        framebuffer.save(filepath, format="WEBP", quality=65, method=6)
-                        vm_data["last_frame_hash"] = current_hash
-                        log.debug(f"Saved snapshot of {vm_name} to {filepath}")
-                    except Exception as e:
-                        log.error(f"Failed to save snapshot for {vm_name}: {e}")
+                    # Create a copy of the image to avoid race conditions
+                    img_copy = framebuffer.copy()
+                    # Create and store task for asynchronous saving
+                    save_tasks.append(asyncio.create_task(
+                        save_image_async(img_copy, filepath, vm_name, vm_data, current_hash)
+                    ))
+
+            # Wait for all save tasks to complete
+            if save_tasks:
+                await asyncio.gather(*save_tasks)
 
         except Exception as e:
             log.error(f"Error in periodic snapshot task: {e}")
             # Continue running even if there's an error
+
+async def save_image_async(image, filepath, vm_name, vm_data, current_hash):
+    """Save an image to disk asynchronously."""
+    try:
+        # Run the image saving in a thread pool to avoid blocking
+        await asyncio.to_thread(
+            image.save, 
+            filepath, 
+            format="WEBP", 
+            quality=65, 
+            method=6
+        )
+        vm_data["last_frame_hash"] = current_hash
+        log.info(f"Saved snapshot of {vm_name} to {filepath}")
+    except Exception as e:
+        log.error(f"Failed to save snapshot for {vm_name}: {e}")
 
 
 async def connect(vm_name: str):
@@ -310,68 +330,66 @@ async def connect(vm_name: str):
                 case ["size", "0", width, height]:
                     log.debug(f"({STATE.name} - {vm_name}) !!! Framebuffer size update: {width}x{height} !!!")
                     vms[vm_name]["size"] = (int(width), int(height))
-                case ["png", "0", "0", "0", "0", initial_frame_b64]:
-                    if STATE < CollabVMState.LOGGED_IN:
-                        try:
-                            log.debug(f"({STATE.name} - {vm_name}) !!! Initial framebuffer received !!!")
-                            image_data = base64.b64decode(initial_frame_b64)
-                            framebuffer = Image.open(BytesIO(image_data))
-                            vms[vm_name]["framebuffer"] = framebuffer
-                            log.debug(f"({STATE.name} - {vm_name}) Initial framebuffer loaded: {framebuffer.size}")
-                        except Exception as e:
-                            log.error(f"({STATE.name} - {vm_name}) Failed to process initial framebuffer: {e}")
-                    elif STATE >= CollabVMState.LOGGED_IN:
-                        try:
-                            image_data = base64.b64decode(initial_frame_b64)
-                            framebuffer = Image.open(BytesIO(image_data))
-                            
-                            # Get expected size from VM info
-                            expected_width, expected_height = vms[vm_name]["size"]
-                            
-                            # Ensure the framebuffer matches the expected size
-                            if framebuffer.size != (expected_width, expected_height) and expected_width > 0 and expected_height > 0:
-                                framebuffer = framebuffer.resize((expected_width, expected_height))
-
-                            vms[vm_name]["framebuffer"] = framebuffer
-                            
-                            log.debug(f"({STATE.name} - {vm_name}) Framebuffer updated: {framebuffer.size}")
-                        except Exception as e:
-                            log.error(f"({STATE.name} - {vm_name}) Failed to process framebuffer update: {e}")
+                case ["png", "0", "0", "0", "0", full_frame_b64]:
+                    try:
+                        log.debug(f"({STATE.name} - {vm_name}) !!! Received full framebuffer update !!!")
+                        expected_width, expected_height = vms[vm_name]["size"]
+                        
+                        # Decode the base64 data to get the PNG image
+                        frame_data = base64.b64decode(full_frame_b64)
+                        frame_img = Image.open(BytesIO(frame_data))
+                        
+                        # Validate image size and handle partial frames
+                        if expected_width > 0 and expected_height > 0:
+                            if frame_img.size != (expected_width, expected_height):
+                                log.warning(f"({STATE.name} - {vm_name}) Partial framebuffer update: "
+                                           f"expected {expected_width}x{expected_height}, got {frame_img.size}")
+                                
+                                # Create a new image of expected size if no framebuffer exists
+                                if vms[vm_name]["framebuffer"] is None:
+                                    vms[vm_name]["framebuffer"] = Image.new('RGB', (expected_width, expected_height))
+                                
+                                # Only update the portion that was received
+                                if vms[vm_name]["framebuffer"]:
+                                    # Create a copy of the current framebuffer to modify
+                                    updated_img = vms[vm_name]["framebuffer"].copy()
+                                    # Paste the new partial frame at position (0,0)
+                                    updated_img.paste(frame_img, (0, 0))
+                                    # Use this as our new framebuffer
+                                    frame_img = updated_img
+                        
+                        # Update the framebuffer with the new image
+                        vms[vm_name]["framebuffer"] = frame_img
+                        log.debug(f"({STATE.name} - {vm_name}) Framebuffer updated with full frame, size: {frame_img.size}")
+                    except Exception as e:
+                        log.error(f"({STATE.name} - {vm_name}) Failed to process full framebuffer update: {e}")
                 case ["png", "0", "0", x, y, rect_b64]:
-                    
-                    if vms[vm_name]["framebuffer"] is not None:
-                        try:
-                            # Check if we have a framebuffer with the right size
-                            log.debug(f"({STATE.name} - {vm_name}) !!! Framebuffer rectangle update at ({x},{y}) !!!")
-                            expected_width, expected_height = vms[vm_name]["size"]
-                            if (vms[vm_name]["framebuffer"].size != (expected_width, expected_height) and 
-                                expected_width > 0 and expected_height > 0):
-                                log.warning(f"({STATE.name} - {vm_name}) Framebuffer size mismatch: "
-                                            f"expected {expected_width}x{expected_height}, got {vms[vm_name]['framebuffer'].size}")
-                                continue
-                            
-                            # Decode and paste the rectangle update
-                            x_pos, y_pos = int(x), int(y)
-                            rect_data = base64.b64decode(rect_b64)
-                            rect_img = Image.open(BytesIO(rect_data))
-                            
-                            # Create a copy of the framebuffer to work with
-                            framebuffer = vms[vm_name]["framebuffer"].copy()
-                            framebuffer.paste(rect_img, (x_pos, y_pos))
-                            
-                            # Verify the framebuffer size is consistent
-                            if rect_img.size[0] + x_pos > framebuffer.size[0] or rect_img.size[1] + y_pos > framebuffer.size[1]:
-                                log.warning(f"({STATE.name} - {vm_name}) Rectangle update would exceed framebuffer bounds: "
-                                            f"rect size {rect_img.size} at position ({x_pos},{y_pos}) exceeds framebuffer {framebuffer.size}")
-                                continue
-
+                    try:
+                        log.debug(f"({STATE.name} - {vm_name}) Received partial framebuffer update at position ({x}, {y})")
+                        x, y = int(x), int(y)
+                        
+                        # Decode the base64 data to get the PNG image fragment
+                        frame_data = base64.b64decode(rect_b64)
+                        fragment_img = Image.open(BytesIO(frame_data))
+                        
+                        # If we don't have a framebuffer yet or it's incompatible, create one
+                        if vms[vm_name]["framebuffer"] is None:
+                            # drop
+                            continue
+                        
+                        # If we have a valid framebuffer, update it with the fragment
+                        if vms[vm_name]["framebuffer"]:
+                            # Create a copy to modify
+                            updated_img = vms[vm_name]["framebuffer"].copy()
+                            # Paste the fragment at the specified position
+                            updated_img.paste(fragment_img, (x, y))
                             # Update the framebuffer
-                            vms[vm_name]["framebuffer"] = framebuffer
-                            
-                        except Exception as e:
-                            log.error(f"({STATE.name} - {vm_name}) Failed to process framebuffer rectangle update: {e}")
-                    else:
-                        log.debug(f"({STATE.name} - {vm_name}) Received rectangle update but framebuffer is not initialized")
+                            vms[vm_name]["framebuffer"] = updated_img
+                            log.debug(f"({STATE.name} - {vm_name}) Updated framebuffer with fragment at ({x}, {y}), fragment size: {fragment_img.size}")
+                        else:
+                            log.warning(f"({STATE.name} - {vm_name}) Cannot update framebuffer - no base framebuffer exists")
+                    except Exception as e:
+                        log.error(f"({STATE.name} - {vm_name}) Failed to process partial framebuffer update: {e}")
                 case ["turn", turn_time, count, current_turn, *queue]:
                     if (
                         queue == vms[vm_name]["turn_queue"]
