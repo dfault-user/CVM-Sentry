@@ -110,7 +110,7 @@ async def save_image_async(image, filepath, vm_name, vm_data, current_hash):
     try:
         # Run the image saving in a thread pool to avoid blocking
         await asyncio.to_thread(
-            image.save, filepath, format="WEBP", quality=65, method=6
+            image.save, filepath, format="WEBP", quality=65, method=6, minimize_size=True
         )
         vm_data["last_frame_hash"] = current_hash
         log.info(f"Saved snapshot of {vm_name} to {filepath}")
