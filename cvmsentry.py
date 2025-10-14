@@ -20,8 +20,6 @@ import imagehash
 LOG_LEVEL = getattr(config, "log_level", "INFO")
 
 # Prepare logs
-if not os.path.exists("logs"):
-    os.makedirs("logs")
 log_format = logging.Formatter("[%(asctime)s:%(name)s] %(levelname)s - %(message)s")
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(log_format)
@@ -69,7 +67,7 @@ async def periodic_snapshot_task():
 
                 # Create directory structure if it doesn't exist
                 date_str = datetime.now().strftime("%b-%d-%Y")
-                snapshot_dir = os.path.join("logs", "webp", vm_name, date_str)
+                snapshot_dir = os.path.join(config.log_directory, "webp", vm_name, date_str)
                 os.makedirs(snapshot_dir, exist_ok=True)
 
                 # Get current epoch timestamp in milliseconds
@@ -137,7 +135,7 @@ async def connect(vm_name: str):
     }
     uri = config.vms[vm_name]
     log_file_path = os.path.join(
-        getattr(config, "log_directory", "logs"), f"{vm_name}.json"
+        getattr(config, "log_directory", "./logs"), f"{vm_name}.json"
     )
     if not os.path.exists(log_file_path):
         with open(log_file_path, "w") as log_file:
