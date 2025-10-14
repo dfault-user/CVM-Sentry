@@ -58,7 +58,7 @@ async def periodic_snapshot_task():
     log.info("Starting periodic snapshot task")
     while True:
         try:
-            await asyncio.sleep(5)
+            await asyncio.sleep(config.snapshot_cadence)
             log.debug("Running periodic framebuffer snapshot capture...")
 
             save_tasks = []
@@ -77,23 +77,23 @@ async def periodic_snapshot_task():
                 filename = f"{epoch_timestamp}.webp"
                 filepath = os.path.join(snapshot_dir, filename)
 
-                # Create a hash of the framebuffer for comparison
+                # Get framebuffer reference (no copy needed)
                 framebuffer = vm_data["framebuffer"]
                 if not framebuffer:
                     continue
 
-                # Calculate difference hash for the image
-                current_hash = str(imagehash.dhash(framebuffer))
+                # Calculate difference hash asynchronously to avoid blocking
+                current_hash = await asyncio.to_thread(
+                    lambda: str(imagehash.dhash(framebuffer))
+                )
 
                 # Only save if the framebuffer has changed since last snapshot
                 if current_hash != vm_data.get("last_frame_hash"):
-                    # Create a copy of the image to avoid race conditions
-                    img_copy = framebuffer.copy()
-                    # Create and store task for asynchronous saving
+                    # Pass framebuffer directly without copying
                     save_tasks.append(
                         asyncio.create_task(
                             save_image_async(
-                                img_copy, filepath, vm_name, vm_data, current_hash
+                                framebuffer, filepath, vm_name, vm_data, current_hash
                             )
                         )
                     )
@@ -349,14 +349,11 @@ async def connect(vm_name: str):
                                         "RGB", (expected_width, expected_height)
                                     )
 
-                                # Only update the portion that was received
+                                # Only update the portion that was received - modify in place
                                 if vms[vm_name]["framebuffer"]:
-                                    # Create a copy of the current framebuffer to modify
-                                    updated_img = vms[vm_name]["framebuffer"].copy()
-                                    # Paste the new partial frame at position (0,0)
-                                    updated_img.paste(frame_img, (0, 0))
-                                    # Use this as our new framebuffer
-                                    frame_img = updated_img
+                                    # Paste directly onto existing framebuffer
+                                    vms[vm_name]["framebuffer"].paste(frame_img, (0, 0))
+                                    frame_img = vms[vm_name]["framebuffer"]
 
                         # Update the framebuffer with the new image
                         vms[vm_name]["framebuffer"] = frame_img
@@ -385,12 +382,8 @@ async def connect(vm_name: str):
 
                         # If we have a valid framebuffer, update it with the fragment
                         if vms[vm_name]["framebuffer"]:
-                            # Create a copy to modify
-                            updated_img = vms[vm_name]["framebuffer"].copy()
-                            # Paste the fragment at the specified position
-                            updated_img.paste(fragment_img, (x, y))
-                            # Update the framebuffer
-                            vms[vm_name]["framebuffer"] = updated_img
+                            # Paste directly onto existing framebuffer (no copy needed)
+                            vms[vm_name]["framebuffer"].paste(fragment_img, (x, y))
                             log.debug(
                                 f"({STATE.name} - {vm_name}) Updated framebuffer with fragment at ({x}, {y}), fragment size: {fragment_img.size}"
                             )
