@@ -71,7 +71,7 @@ async def periodic_snapshot_task():
                 os.makedirs(snapshot_dir, exist_ok=True)
 
                 # Generate formatted timestamp in UTC
-                timestamp = datetime.now(timezone.utc).strftime("%b-%d-%Y_%H_%M_%S")
+                timestamp = datetime.now(timezone.utc).strftime("%b-%d-%Y_%H-%M-%S")
                 filename = f"{timestamp}.webp"
                 filepath = os.path.join(snapshot_dir, filename)
 
