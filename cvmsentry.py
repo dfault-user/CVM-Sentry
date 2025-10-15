@@ -65,9 +65,9 @@ async def periodic_snapshot_task():
                 if not vm_data.get("framebuffer"):
                     continue
 
-                # Create directory structure if it doesn't exist
-                date_str = datetime.now().strftime("%Y-%m-%d")
-                snapshot_dir = os.path.join(config.log_directory, "webp", vm_name, date_str)
+                # Create directory structure if it doesn't exist - [date]/[vm] structure in UTC
+                date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                snapshot_dir = os.path.join(config.log_directory, "webp", date_str, vm_name)
                 os.makedirs(snapshot_dir, exist_ok=True)
 
                 # Generate formatted timestamp in UTC
