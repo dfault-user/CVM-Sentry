@@ -70,9 +70,9 @@ async def periodic_snapshot_task():
                 snapshot_dir = os.path.join(config.log_directory, "webp", vm_name, date_str)
                 os.makedirs(snapshot_dir, exist_ok=True)
 
-                # Get current epoch timestamp in milliseconds
-                epoch_timestamp = int(datetime.now().timestamp() * 1000)
-                filename = f"{epoch_timestamp}.webp"
+                # Generate formatted timestamp in UTC
+                timestamp = datetime.now(timezone.utc).strftime("%b-%d-%Y_%H_%M_%S")
+                filename = f"{timestamp}.webp"
                 filepath = os.path.join(snapshot_dir, filename)
 
                 # Get framebuffer reference (no copy needed)
