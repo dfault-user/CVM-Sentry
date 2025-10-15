@@ -66,7 +66,7 @@ async def periodic_snapshot_task():
                     continue
 
                 # Create directory structure if it doesn't exist
-                date_str = datetime.now().strftime("%b-%d-%Y")
+                date_str = datetime.now().strftime("%Y-%m-%d")
                 snapshot_dir = os.path.join(config.log_directory, "webp", vm_name, date_str)
                 os.makedirs(snapshot_dir, exist_ok=True)
 
