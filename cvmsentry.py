@@ -148,7 +148,7 @@ async def connect(vm_name: str):
     ) as websocket:
         STATE = CollabVMState.WS_CONNECTED
         log.info(f"Connected to VM '{vm_name}' at {uri}")
-        await send_guac(websocket, "rename", "")
+        await send_guac(websocket, "rename", config.unauth_name)
         await send_guac(websocket, "connect", vm_name)
         if vm_name not in vm_botuser:
             vm_botuser[vm_name] = ""
