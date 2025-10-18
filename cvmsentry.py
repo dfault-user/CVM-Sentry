@@ -464,7 +464,7 @@ for vm in config.vms.keys():
                 try:
                     await connect(vm_name)
                 except websockets.exceptions.ConnectionClosedError as e:
-                    log.warning(
+                    log.error(
                         f"Connection to VM '{vm_name}' closed with error: {e}. Reconnecting..."
                     )
                     await asyncio.sleep(5)  # Wait before attempting to reconnect
