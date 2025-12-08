@@ -470,17 +470,17 @@ for vm_dict_label, vm_obj in config.vms.items():
                     log.error(
                         f"Connection to VM '{vm_obj['ws_url']}' closed with error: {e}. Reconnecting..."
                     )
-                    await asyncio.sleep(5)  # Wait before attempting to reconnect
+                    await asyncio.sleep(0)
                 except websockets.exceptions.ConnectionClosedOK:
                     log.warning(
                         f"Connection to VM '{vm_obj['ws_url']}' closed cleanly (code 1005). Reconnecting..."
                     )
-                    await asyncio.sleep(5)  # Wait before attempting to reconnect
+                    await asyncio.sleep(0)
                 except websockets.exceptions.InvalidStatus as e:
                     log.error(
                         f"Failed to connect to VM '{vm_obj['ws_url']}' with status code: {e}. Reconnecting..."
                     )
-                    await asyncio.sleep(10)  # Wait longer for HTTP errors
+                    await asyncio.sleep(0)
                 except websockets.exceptions.WebSocketException as e:
                     log.error(
                         f"WebSocket error connecting to VM '{vm_obj['ws_url']}': {e}. Reconnecting..."
@@ -490,7 +490,7 @@ for vm_dict_label, vm_obj in config.vms.items():
                     log.error(
                         f"Unexpected error connecting to VM '{vm_obj['ws_url']}': {e}. Reconnecting..."
                     )
-                    await asyncio.sleep(10)  # Wait longer for unexpected errors
+                    await asyncio.sleep(0)
 
         # Create tasks for VM connections
         vm_tasks = [connect_with_reconnect(vm) for vm in config.vms.values()]
