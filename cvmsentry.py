@@ -136,12 +136,9 @@ async def connect(vm_obj: dict):
     }
     ws_url = vm_obj["ws_url"]
     log_directory = getattr(config, "log_directory", "./logs")
-    # Ensure the log directory exists
-    os.makedirs(log_directory, exist_ok=True)
-    log_file_path = os.path.join(log_directory, f"{log_label}.json")
-    if not os.path.exists(log_file_path):
-        with open(log_file_path, "w") as log_file:
-            log_file.write("{}")
+    # Create VM-specific log directory
+    vm_log_directory = os.path.join(log_directory, log_label)
+    os.makedirs(vm_log_directory, exist_ok=True)
 
     origin = Origin(vm_obj.get("origin_override", get_origin_from_ws_url(ws_url)))
 
@@ -240,37 +237,30 @@ async def connect(vm_obj: dict):
                     utc_day = utc_now.strftime("%Y-%m-%d")
                     timestamp = utc_now.isoformat()
 
-                    with open(log_file_path, "r+") as log_file:
-                        try:
-                            log_data = json.load(log_file)
-                        except json.JSONDecodeError:
-                            log_data = {}
+                    # Get daily log file path
+                    daily_log_path = os.path.join(vm_log_directory, f"{utc_day}.json")
+                    
+                    # Load existing log data or create new
+                    if os.path.exists(daily_log_path):
+                        with open(daily_log_path, "r") as log_file:
+                            try:
+                                log_data = json.load(log_file)
+                            except json.JSONDecodeError:
+                                log_data = []
+                    else:
+                        log_data = []
 
-                        if utc_day not in log_data:
-                            log_data[utc_day] = []
-
-                            # for i in range(0, len(backlog), 2):
-                            #     backlog_user = backlog[i]
-                            #     backlog_message = backlog[i + 1]
-                            #     if not any(entry["message"] == backlog_message and entry["username"] == backlog_user for entry in log_data[utc_day]):
-                            #         log.info(f"[{vm_name} - {backlog_user} (backlog)]: {backlog_message}")
-                            #         log_data[utc_day].append({
-                            #             "timestamp": timestamp,
-                            #             "username": backlog_user,
-                            #             "message": backlog_message
-                            #         })
-
-                        log_data[utc_day].append(
-                            {
-                                "type": "chat",
-                                "timestamp": timestamp,
-                                "username": user,
-                                "message": message,
-                            }
-                        )
-                        log_file.seek(0)
+                    log_data.append(
+                        {
+                            "type": "chat",
+                            "timestamp": timestamp,
+                            "username": user,
+                            "message": message,
+                        }
+                    )
+                    
+                    with open(daily_log_path, "w") as log_file:
                         json.dump(log_data, log_file, indent=4)
-                        log_file.truncate()
 
                     if config.commands["enabled"] and message.startswith(
                         config.commands["prefix"]
@@ -424,27 +414,30 @@ async def connect(vm_obj: dict):
                         utc_day = utc_now.strftime("%Y-%m-%d")
                         timestamp = utc_now.isoformat()
 
-                        with open(log_file_path, "r+") as log_file:
-                            try:
-                                log_data = json.load(log_file)
-                            except json.JSONDecodeError:
-                                log_data = {}
+                        # Get daily log file path
+                        daily_log_path = os.path.join(vm_log_directory, f"{utc_day}.json")
+                        
+                        # Load existing log data or create new
+                        if os.path.exists(daily_log_path):
+                            with open(daily_log_path, "r") as log_file:
+                                try:
+                                    log_data = json.load(log_file)
+                                except json.JSONDecodeError:
+                                    log_data = []
+                        else:
+                            log_data = []
 
-                            if utc_day not in log_data:
-                                log_data[utc_day] = []
-
-                            log_data[utc_day].append(
-                                {
-                                    "type": "turn",
-                                    "timestamp": timestamp,
-                                    "active_turn_user": current_turn,
-                                    "queue": queue,
-                                }
-                            )
-
-                            log_file.seek(0)
+                        log_data.append(
+                            {
+                                "type": "turn",
+                                "timestamp": timestamp,
+                                "active_turn_user": current_turn,
+                                "queue": queue,
+                            }
+                        )
+                        
+                        with open(daily_log_path, "w") as log_file:
                             json.dump(log_data, log_file, indent=4)
-                            log_file.truncate()
 
                 case ["remuser", count, *list]:
                     for i in range(int(count)):
