@@ -120,7 +120,7 @@ async def save_image_async(image, filepath, vm_name, vm_data, current_hash):
 
 
 async def connect(vm_obj: dict):
-    log.info(f"Connecting to VM at {vm_obj['ws_url']} with origin {get_origin_from_ws_url(vm_obj['ws_url'])}")
+    log.debug(f"Connecting to VM at {vm_obj['ws_url']} with origin {get_origin_from_ws_url(vm_obj['ws_url'])}")
     global vms
     global vm_botuser
     fqdn = urlparse(vm_obj["ws_url"]).netloc
@@ -184,7 +184,7 @@ async def connect(vm_obj: dict):
                             f"Connected to VM '{log_label}' successfully. Turns enabled: {bool(int(turns_enabled))}, Votes enabled: {bool(int(votes_enabled))}, Uploads enabled: {bool(int(uploads_enabled))}"
                         )
                     else:
-                        log.error(
+                        log.debug(
                             f"Failed to connect to VM '{log_label}'. Connection status: {connection_status}"
                         )
                         STATE = CollabVMState.WS_DISCONNECTED
@@ -477,7 +477,7 @@ for vm_dict_label, vm_obj in config.vms.items():
                     )
                     await asyncio.sleep(0)
                 except websockets.exceptions.InvalidStatus as e:
-                    log.error(
+                    log.debug(
                         f"Failed to connect to VM '{vm_obj['ws_url']}' with status code: {e}. Reconnecting..."
                     )
                     await asyncio.sleep(0)
