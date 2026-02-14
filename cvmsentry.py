@@ -146,7 +146,7 @@ async def connect(vm_obj: dict):
         uri=ws_url,
         subprotocols=[Subprotocol("guacamole")],
         origin=Origin(origin),
-        user_agent_header="cvmsentry/1 (https://git.nixlabs.dev/clair/cvmsentry)",
+        user_agent_header="cvmsentry/1 (https://github.com/dfault-user/CVM-Sentry)",
     ) as websocket:
         STATE = CollabVMState.WS_CONNECTED
         log.info(f"Connected to VM '{log_label}' at {ws_url}")
