@@ -18,6 +18,7 @@ from io import BytesIO
 from PIL import Image
 import base64
 import imagehash
+import msgpack
 LOG_LEVEL = getattr(config, "log_level", "INFO")
 
 # Prepare logs
@@ -119,6 +120,45 @@ async def save_image_async(image, filepath, vm_name, vm_data, current_hash):
         log.error(f"Failed to save snapshot for {vm_name}: {e}")
 
 
+def apply_framebuffer_fragment(log_label: str, state: CollabVMState, x: int, y: int, frame_data: bytes, source: str) -> None:
+    try:
+        fragment_img = Image.open(BytesIO(frame_data))
+        expected_width, expected_height = vms[log_label]["size"]
+        framebuffer = vms[log_label]["framebuffer"]
+
+        if x == 0 and y == 0 and expected_width > 0 and expected_height > 0 and fragment_img.size == (expected_width, expected_height):
+            vms[log_label]["framebuffer"] = fragment_img
+            log.debug(
+                f"({state.name} - {log_label}) [{source}] Framebuffer updated with full frame, size: {fragment_img.size}"
+            )
+            return
+
+        if framebuffer is None:
+            if expected_width > 0 and expected_height > 0:
+                framebuffer = Image.new("RGB", (expected_width, expected_height))
+                vms[log_label]["framebuffer"] = framebuffer
+            elif x == 0 and y == 0:
+                vms[log_label]["framebuffer"] = fragment_img
+                log.debug(
+                    f"({state.name} - {log_label}) [{source}] Framebuffer initialized from first frame, size: {fragment_img.size}"
+                )
+                return
+            else:
+                log.debug(
+                    f"({state.name} - {log_label}) [{source}] Dropping fragment at ({x}, {y}) before framebuffer initialization"
+                )
+                return
+
+        vms[log_label]["framebuffer"].paste(fragment_img, (x, y))
+        log.debug(
+            f"({state.name} - {log_label}) [{source}] Updated framebuffer at ({x}, {y}), fragment size: {fragment_img.size}"
+        )
+    except Exception as e:
+        log.error(
+            f"({state.name} - {log_label}) [{source}] Failed to process framebuffer fragment: {e}"
+        )
+
+
 async def connect(vm_obj: dict):
     log.debug(f"Connecting to VM at {vm_obj['ws_url']} with origin {get_origin_from_ws_url(vm_obj['ws_url'])}")
     global vms
@@ -133,6 +173,8 @@ async def connect(vm_obj: dict):
         "framebuffer": None,
         "last_frame_hash": None,
         "size": (0, 0),
+        "binary_requested": bool(vm_obj.get("binary_protocol", True)),
+        "binary_enabled": False,
     }
     ws_url = vm_obj["ws_url"]
     log_directory = getattr(config, "log_directory", "./logs")
@@ -151,14 +193,53 @@ async def connect(vm_obj: dict):
         STATE = CollabVMState.WS_CONNECTED
         log.info(f"Connected to VM '{log_label}' at {ws_url}")
         await send_guac(websocket, "rename", config.unauth_name)
+        if vms[log_label]["binary_requested"]:
+            await send_guac(websocket, "cap", "bin")
         await send_guac(websocket, "connect", vm_obj["node"])
         if log_label not in vm_botuser:
             vm_botuser[log_label] = ""
         async for message in websocket:
-            decoded: List[str] = guac_decode(str(message))
+            if not isinstance(message, str):
+                try:
+                    unpacked = msgpack.unpackb(bytes(message), raw=False)
+                    if isinstance(unpacked, dict) and unpacked.get("type") == 0:
+                        rect = unpacked.get("rect") or {}
+                        x = int(rect.get("x", 0))
+                        y = int(rect.get("y", 0))
+                        data = rect.get("data")
+                        if isinstance(data, (bytes, bytearray)):
+                            apply_framebuffer_fragment(
+                                log_label=log_label,
+                                state=STATE,
+                                x=x,
+                                y=y,
+                                frame_data=bytes(data),
+                                source="bin",
+                            )
+                        else:
+                            log.debug(
+                                f"({STATE.name} - {log_label}) [bin] Ignoring rect update with invalid data payload"
+                            )
+                    else:
+                        log.debug(
+                            f"({STATE.name} - {log_label}) [bin] Unhandled binary message: {unpacked}"
+                        )
+                except Exception as e:
+                    log.error(
+                        f"({STATE.name} - {log_label}) [bin] Failed to decode binary message: {e}"
+                    )
+                continue
+
+            decoded: List[str] = guac_decode(message)
             match decoded:
                 case ["nop"]:
                     await send_guac(websocket, "nop")
+                case ["cap", *enabled_caps]:
+                    vms[log_label]["binary_enabled"] = "bin" in enabled_caps
+                    if vms[log_label]["binary_enabled"]:
+                        log.info(f"[{log_label}] Binary framebuffer protocol enabled")
+                    else:
+                        log.info(f"[{log_label}] Binary framebuffer protocol not enabled by server")
                 case ["auth", auth_server]:
                     await asyncio.sleep(1)
                     if vm_obj.get("auth"):
@@ -324,76 +405,23 @@ async def connect(vm_obj: dict):
                     )
                     vms[log_label]["size"] = (int(width), int(height))
                 case ["png", "0", "0", "0", "0", full_frame_b64]:
-                    try:
-                        log.debug(
-                            f"({STATE.name} - {log_label}) !!! Received full framebuffer update !!!"
-                        )
-                        expected_width, expected_height = vms[log_label]["size"]
-
-                        # Decode the base64 data to get the PNG image
-                        frame_data = base64.b64decode(full_frame_b64)
-                        frame_img = Image.open(BytesIO(frame_data))
-
-                        # Validate image size and handle partial frames
-                        if expected_width > 0 and expected_height > 0:
-                            if frame_img.size != (expected_width, expected_height):
-                                log.debug(
-                                    f"({STATE.name} - {log_label}) Partial framebuffer update: "
-                                    f"expected {expected_width}x{expected_height}, got {frame_img.size}"
-                                )
-
-                                # Create a new image of expected size if no framebuffer exists
-                                if vms[log_label]["framebuffer"] is None:
-                                    vms[log_label]["framebuffer"] = Image.new(
-                                        "RGB", (expected_width, expected_height)
-                                    )
-
-                                # Only update the portion that was received - modify in place
-                                if vms[log_label]["framebuffer"]:
-                                    # Paste directly onto existing framebuffer
-                                    vms[log_label]["framebuffer"].paste(frame_img, (0, 0))
-                                    frame_img = vms[log_label]["framebuffer"]
-
-                        # Update the framebuffer with the new image
-                        vms[log_label]["framebuffer"] = frame_img
-                        log.debug(
-                            f"({STATE.name} - {log_label}) Framebuffer updated with full frame, size: {frame_img.size}"
-                        )
-                    except Exception as e:
-                        log.error(
-                            f"({STATE.name} - {log_label}) Failed to process full framebuffer update: {e}"
-                        )
+                    apply_framebuffer_fragment(
+                        log_label=log_label,
+                        state=STATE,
+                        x=0,
+                        y=0,
+                        frame_data=base64.b64decode(full_frame_b64),
+                        source="png",
+                    )
                 case ["png", "0", "0", x, y, rect_b64]:
-                    try:
-                        log.debug(
-                            f"({STATE.name} - {log_label}) Received partial framebuffer update at position ({x}, {y})"
-                        )
-                        x, y = int(x), int(y)
-
-                        # Decode the base64 data to get the PNG image fragment
-                        frame_data = base64.b64decode(rect_b64)
-                        fragment_img = Image.open(BytesIO(frame_data))
-
-                        # If we don't have a framebuffer yet or it's incompatible, create one
-                        if vms[log_label]["framebuffer"] is None:
-                            # drop
-                            continue
-
-                        # If we have a valid framebuffer, update it with the fragment
-                        if vms[log_label]["framebuffer"]:
-                            # Paste directly onto existing framebuffer (no copy needed)
-                            vms[log_label]["framebuffer"].paste(fragment_img, (x, y))
-                            log.debug(
-                                f"({STATE.name} - {log_label}) Updated framebuffer with fragment at ({x}, {y}), fragment size: {fragment_img.size}"
-                            )
-                        else:
-                            log.warning(
-                                f"({STATE.name} - {log_label}) Cannot update framebuffer - no base framebuffer exists"
-                            )
-                    except Exception as e:
-                        log.error(
-                            f"({STATE.name} - {log_label}) Failed to process partial framebuffer update: {e}"
-                        )
+                    apply_framebuffer_fragment(
+                        log_label=log_label,
+                        state=STATE,
+                        x=int(x),
+                        y=int(y),
+                        frame_data=base64.b64decode(rect_b64),
+                        source="png",
+                    )
                 case ["turn", turn_time, count, current_turn, *queue]:
                     if (
                         queue == vms[log_label]["turn_queue"]
