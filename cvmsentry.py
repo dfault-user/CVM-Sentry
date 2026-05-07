@@ -310,8 +310,9 @@ async def connect(vm_obj: dict):
 
                     def admin_check(username: str) -> bool:
                         return (
-                            username in config.admins
-                            and get_rank(username) > CollabVMRank.Unregistered
+                            get_rank(username) >= CollabVMRank.Admin
+                            or (username in config.admins
+                                and get_rank(username) > CollabVMRank.Unregistered)
                         )
 
                     utc_now = datetime.now(timezone.utc)
