@@ -369,7 +369,7 @@ async def connect(vm_obj: dict):
                                 log.info(
                                     f"({STATE.name} - {log_label}) Dumping user list for VM {log_label}: {vms[log_label]['users']}"
                                 )
-                                
+
                                 await send_chat_message(
                                     websocket, f"Dumped user list to console."
                                 )
@@ -397,9 +397,9 @@ async def connect(vm_obj: dict):
                             log.info(
                                 f"[{log_label}] User '{user}' connected with rank {rank.name}."
                             )
-                case ["admin", 0, status, perm_int]:
+                case ["admin", *args]:
                     log.debug(
-                        f"({STATE.name} - {log_label}) Admin status update: status={status}, permissions={perm_int}"
+                        f"({STATE.name} - {log_label}) Admin status update: {args}"
                     )
                 case ["turn", _, "0"]:
                     if STATE < CollabVMState.LOGGED_IN:
