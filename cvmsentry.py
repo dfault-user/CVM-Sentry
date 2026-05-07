@@ -397,10 +397,6 @@ async def connect(vm_obj: dict):
                             log.info(
                                 f"[{log_label}] User '{user}' connected with rank {rank.name}."
                             )
-                case ["admin", *args]:
-                    log.debug(
-                        f"({STATE.name} - {log_label}) Admin status update: {args}"
-                    )
                 case ["turn", _, "0"]:
                     if STATE < CollabVMState.LOGGED_IN:
                         continue
@@ -491,6 +487,10 @@ async def connect(vm_obj: dict):
                             log.info(f"[{log_label}] User '{username}' left.")
                 case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
+                case ["admin", status, perm_int]:
+                    log.debug(
+                        f"({STATE.name} - {log_label}) Admin status update: status={status}, permissions={perm_int}"
+                    )
                 case _:
                     if decoded is not None:
                         log.debug(
