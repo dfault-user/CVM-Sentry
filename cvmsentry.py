@@ -489,6 +489,7 @@ async def connect(vm_obj: dict):
                 case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
                 case ["admin", status, perm_int]:
+                    print(status, perm_int, CollabVMClientModerationPerms(int(perm_int)))
                     match status:
                         case "0":
                             log.debug(
