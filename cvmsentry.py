@@ -380,12 +380,6 @@ async def connect(vm_obj: dict):
                                 
                                 if "admin_password" in vm_obj:
                                     await send_guac(websocket, "admin", "2", vm_obj["admin_password"])
-                            case "di":
-                                if not admin_check(user) and admin_check(vm_botuser[log_label]):
-                                    continue
-                                
-                                for username in vms[log_label]["users"]:
-                                    await send_guac(websocket, "admin", "19", username)
 
                 
                 case ["adduser", count, *list]:
@@ -493,19 +487,21 @@ async def connect(vm_obj: dict):
                             log.info(f"[{log_label}] User '{username}' left.")
                 case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
-                case ["admin", 3, perm_int]:
-                    perms = CollabVMClientModerationPerms(perm_int)
-                    log.info(
-                        f"[{log_label}] Bot user '{vm_botuser[log_label]}' granted mod permissions: {perms}"
-                    )
-                case ["admin", 1, _]:
-                    log.info(
-                        f"[{log_label}] Bot user '{vm_botuser[log_label]}' granted admin permissions"
-                    )
-                case ["admin", 19, user, ip]:
-                    log.info(
-                        f"[{log_label}] User '{user}'\'s IP: {ip}"
-                    )
+                case ["admin", status, perm_int]:
+                    match status:
+                        case "0":
+                            log.debug(
+                                f"({STATE.name} - {log_label}) Admin authentication failed with status {status} and permissions {perm_int}"
+                            )
+                        case "1":
+                            log.info(
+                                f"({STATE.name} - {log_label}) Admin authentication succeeded"
+                            )
+                        case "3":
+                            permissions = CollabVMClientModerationPerms(int(perm_int))
+                            log.info(
+                                f"({STATE.name} - {log_label}) Moderator authentication succeeded with permissions {permissions}"
+                            )
                 case _:
                     if decoded is not None:
                         log.debug(
