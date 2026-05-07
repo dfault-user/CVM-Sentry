@@ -487,21 +487,19 @@ async def connect(vm_obj: dict):
                             log.info(f"[{log_label}] User '{username}' left.")
                 case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
-                case ["admin", status, perm_int]:
-                    match status:
-                        case "0":
-                            log.debug(
-                                f"({STATE.name} - {log_label}) Admin authentication failed with status {status} and permissions {perm_int}"
-                            )
-                        case "1":
-                            log.info(
-                                f"({STATE.name} - {log_label}) Admin authentication succeeded"
-                            )
-                        case "3":
-                            permissions = CollabVMClientModerationPerms(int(perm_int))
-                            log.info(
-                                f"({STATE.name} - {log_label}) Moderator authentication succeeded with permissions {permissions}"
-                            )
+                case ["admin", "0"]: # generic auth failure
+                    log.info(
+                        f"({STATE.name} - {log_label}) Admin authentication failed with generic failure"
+                    )
+                case ["admin", "1"]:
+                    log.info(
+                        f"({STATE.name} - {log_label}) Admin authentication succeeded with provided password"
+                    )
+                case ["admin", "3", perm_int]:
+                    permissions = CollabVMClientModerationPerms(int(perm_int))
+                    log.info(
+                        f"({STATE.name} - {log_label}) Moderator authentication succeeded with provided password and permissions {permissions}"
+                    )
                 case _:
                     if decoded is not None:
                         log.debug(
