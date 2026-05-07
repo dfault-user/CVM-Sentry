@@ -6,6 +6,7 @@ from cvmlib import (
     CollabVMRank,
     CollabVMState,
     CollabVMClientRenameStatus,
+    CollabVMClientModerationPerms
 )
 import config
 import os, random, websockets, asyncio
@@ -488,9 +489,20 @@ async def connect(vm_obj: dict):
                 case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
                 case ["admin", status, perm_int]:
-                    log.debug(
-                        f"({STATE.name} - {log_label}) Admin status update: status={status}, permissions={perm_int}"
-                    )
+                    match status:
+                        case "0":
+                            log.debug(
+                                f"({STATE.name} - {log_label}) Admin authentication failed with status {status} and permissions {perm_int}"
+                            )
+                        case "1":
+                            log.info(
+                                f"({STATE.name} - {log_label}) Admin authentication succeeded"
+                            )
+                        case "3":
+                            permissions = CollabVMClientModerationPerms(int(perm_int))
+                            log.info(
+                                f"({STATE.name} - {log_label}) Moderator authentication succeeded with permissions {permissions}"
+                            )
                 case _:
                     if decoded is not None:
                         log.debug(

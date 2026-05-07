@@ -1,7 +1,7 @@
 # FUNCTIONAL IMPORTS
 import websockets, asyncio, logging, sys
 from typing import List, TypedDict
-
+from enum import IntFlag
 log_format = logging.Formatter(
     "[%(asctime)s:%(name)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
 )
@@ -40,6 +40,22 @@ class CollabVMRank(IntEnum):
     Mod = 3
     """Represents a moderator user."""
 
+class CollabVMClientModerationPerms(IntFlag):
+    """
+    Bitmask permissions for CollabVM Moderators.
+    """
+    NONE            = 0
+    RESET_VM        = 1    # Reset the VM back to its initial state
+    REBOOT_VM       = 2    # Reboot the VM
+    BAN_USER        = 4    # Ban a user from the VM
+    FORCE_VOTE      = 8    # Forcibly pass or cancel a vote to reset
+    MUTE_USER       = 16   # Mute a user (chat/turns)
+    KICK_USER       = 32   # Kick a user from the VM
+    MANAGE_QUEUE    = 64   # Jump/clear queue and end individual turns
+    RENAME_USER     = 128  # Rename another user
+    GRAB_IP         = 256  # Get the IP address of another user
+    SEND_RAW_CHAT   = 512  # Send non-sanitized (XSS) chat messages
+    
 class CollabVMClientRenameStatus(IntEnum):
     """Represents the status of a client rename attempt."""
     
