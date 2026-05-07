@@ -365,12 +365,23 @@ async def connect(vm_obj: dict):
                             case "dump":
                                 if not admin_check(user):
                                     continue
+
                                 log.info(
                                     f"({STATE.name} - {log_label}) Dumping user list for VM {log_label}: {vms[log_label]['users']}"
                                 )
+                                
                                 await send_chat_message(
                                     websocket, f"Dumped user list to console."
                                 )
+                            case "auth":
+                                if not admin_check(user):
+                                    continue
+                                
+                                if "admin_password" in vm_obj:
+                                    await send_guac(websocket, "admin", "2", vm_obj["admin_password"])
+                                    
+
+                
                 case ["adduser", count, *list]:
                     for i in range(int(count)):
                         user = list[i * 2]
@@ -386,6 +397,10 @@ async def connect(vm_obj: dict):
                             log.info(
                                 f"[{log_label}] User '{user}' connected with rank {rank.name}."
                             )
+                case ["admin", 0, status, perm_int]:
+                    log.debug(
+                        f"({STATE.name} - {log_label}) Admin status update: status={status}, permissions={perm_int}"
+                    )
                 case ["turn", _, "0"]:
                     if STATE < CollabVMState.LOGGED_IN:
                         continue
