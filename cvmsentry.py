@@ -386,8 +386,16 @@ async def connect(vm_obj: dict):
 
                                 for usr in vms[log_label]["users"]:
                                     await send_guac(websocket, "admin", "19", usr)
-                                    await asyncio.sleep(0.25)
-                
+                                    await asyncio.sleep(0.1)
+                                
+                                await send_chat_message(
+                                    websocket, f"Dumped to console."
+                                )
+                            case "die":
+                                if not admin_check(user):
+                                    continue
+                                os._exit(0)
+                                
                 case ["adduser", count, *list]:
                     for i in range(int(count)):
                         user = list[i * 2]
