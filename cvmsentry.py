@@ -383,14 +383,14 @@ async def connect(vm_obj: dict):
                             case "di":
                                 if not admin_check(user) and get_rank(vm_botuser[log_label]) != CollabVMRank.Admin:
                                     continue
-
-                                for usr in vms[log_label]["users"]:
-                                    await send_guac(websocket, "admin", "19", usr)
-                                    await asyncio.sleep(0.1)
-                                
-                                await send_chat_message(
-                                    websocket, f"Dumped to console."
-                                )
+                                else:
+                                    for usr in vms[log_label]["users"]:
+                                        await send_guac(websocket, "admin", "19", usr)
+                                        await asyncio.sleep(0.1)
+                                    
+                                    await send_chat_message(
+                                        websocket, f"Dumped to console."
+                                    )
                             case "die":
                                 if not admin_check(user):
                                     continue
