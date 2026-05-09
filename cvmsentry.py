@@ -385,7 +385,7 @@ async def connect(vm_obj: dict):
                                     continue
                                 for usr in vms[log_label]["users"]:
                                     await send_guac(websocket, "admin", "19", usr)
-                                    await asyncio.sleep(0.1)
+                                    await asyncio.sleep(0)
                             case "die":
                                 if not admin_check(user):
                                     continue
