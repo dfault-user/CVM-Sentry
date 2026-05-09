@@ -381,8 +381,7 @@ async def connect(vm_obj: dict):
                                 if "admin_password" in vm_obj:
                                     await send_guac(websocket, "admin", "2", vm_obj["admin_password"])
                             case "di":
-                                log.info(admin_check(user), get_rank(vm_botuser[log_label]))
-                                if not admin_check(user) and get_rank(vm_botuser[log_label]) != CollabVMRank.Admin:
+                                if not admin_check(user):
                                     continue
                                 for usr in vms[log_label]["users"]:
                                     await send_guac(websocket, "admin", "19", usr)
