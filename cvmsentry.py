@@ -508,11 +508,8 @@ async def connect(vm_obj: dict):
                         f"({STATE.name} - {log_label}) Moderator authentication succeeded with provided password and permissions {permissions}"
                     )
                 case ["admin", "19", username, ip]:
-                    push_log_entry(
-                        vm_log_directory,
-                        "ip",
-                        username=username,
-                        ip=ip,
+                    log.info(
+                        f"({STATE.name} - {log_label}) User '{username}' with IP {ip}"
                     )
                 case _:
                     if decoded is not None:
