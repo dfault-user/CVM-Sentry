@@ -202,6 +202,7 @@ async def connect(vm_obj: dict):
         "size": (0, 0),
         "binary_requested": bool(vm_obj.get("binary_protocol", True)),
         "binary_enabled": False,
+        "self_rank" : None,
     }
     ws_url = vm_obj["ws_url"]
     log_directory = getattr(config, "log_directory", "./logs")
@@ -288,6 +289,7 @@ async def connect(vm_obj: dict):
                 ]:
                     if connection_status == "1":
                         STATE = CollabVMState.VM_CONNECTED
+                        vms[log_label]["self_rank"] = CollabVMRank.Unregistered
                         log.info(
                             f"Connected to VM '{log_label}' successfully. Turns enabled: {bool(int(turns_enabled))}, Votes enabled: {bool(int(votes_enabled))}, Uploads enabled: {bool(int(uploads_enabled))}"
                         )
@@ -322,6 +324,7 @@ async def connect(vm_obj: dict):
                                 ].pop(old_name)
                 case ["login", "1"]:
                     STATE = CollabVMState.LOGGED_IN
+                    vms[log_label]["self_rank"] = CollabVMRank.Registered
                     if config.send_autostart and config.autostart_messages:
                         await send_chat_message(
                             websocket, random.choice(config.autostart_messages)
@@ -482,11 +485,13 @@ async def connect(vm_obj: dict):
                         f"({STATE.name} - {log_label}) Admin authentication failed with generic failure"
                     )
                 case ["admin", "1"]:
+                    vms[log_label]["self_rank"] = CollabVMRank.Admin
                     log.info(
                         f"({STATE.name} - {log_label}) Admin authentication succeeded with provided password"
                     )
                 case ["admin", "3", perm_int]:
                     permissions = CollabVMClientModerationPerms(int(perm_int))
+                    vms[log_label]["self_rank"] = CollabVMRank.Mod
                     log.info(
                         f"({STATE.name} - {log_label}) Moderator authentication succeeded with provided password and permissions {permissions}"
                     )
