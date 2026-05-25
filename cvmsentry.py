@@ -413,6 +413,11 @@ async def connect(vm_obj: dict):
                             log.info(
                                 f"[{log_label}] User '{user}' connected with rank {rank.name}."
                             )
+                            push_log_entry(
+                                vm_log_directory,
+                                "user_join",
+                                username=user,
+                            )
                             await send_guac(websocket, "admin", "19", user)
                             await asyncio.sleep(0)
                 case ["turn", _, "0"]:
@@ -479,6 +484,11 @@ async def connect(vm_obj: dict):
                         username = list[i]
                         if username in vms[log_label]["users"]:
                             del vms[log_label]["users"][username]
+                            push_log_entry(
+                                vm_log_directory,
+                                "user_leave",
+                                username=username,
+                            )
                             log.info(f"[{log_label}] User '{username}' left.")
                 case ["flag", *args] | ["png", *args] | ["sync", *args]:
                     continue
