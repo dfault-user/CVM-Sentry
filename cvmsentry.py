@@ -54,6 +54,32 @@ async def send_guac(websocket, *args: str):
     await websocket.send(guac_encode(list(args)))
 
 
+def push_log_entry(vm_log_directory: str, entry_type: str, **data) -> None:
+    utc_now = datetime.now(timezone.utc)
+    utc_day = utc_now.strftime("%Y-%m-%d")
+    daily_log_path = os.path.join(vm_log_directory, f"{utc_day}.json")
+
+    if os.path.exists(daily_log_path):
+        with open(daily_log_path, "r") as log_file:
+            try:
+                log_data = json.load(log_file)
+            except json.JSONDecodeError:
+                log_data = []
+    else:
+        log_data = []
+
+    log_data.append(
+        {
+            "type": entry_type,
+            "timestamp": utc_now.isoformat(),
+            **data,
+        }
+    )
+
+    with open(daily_log_path, "w") as log_file:
+        json.dump(log_data, log_file, indent=4)
+
+
 async def periodic_snapshot_task():
     """Background task that saves VM framebuffers as snapshots in WEBP format."""
     log.info("Starting periodic snapshot task")
@@ -316,34 +342,12 @@ async def connect(vm_obj: dict):
                                 and get_rank(username) > CollabVMRank.Unregistered)
                         )
 
-                    utc_now = datetime.now(timezone.utc)
-                    utc_day = utc_now.strftime("%Y-%m-%d")
-                    timestamp = utc_now.isoformat()
-
-                    # Get daily log file path
-                    daily_log_path = os.path.join(vm_log_directory, f"{utc_day}.json")
-                    
-                    # Load existing log data or create new
-                    if os.path.exists(daily_log_path):
-                        with open(daily_log_path, "r") as log_file:
-                            try:
-                                log_data = json.load(log_file)
-                            except json.JSONDecodeError:
-                                log_data = []
-                    else:
-                        log_data = []
-
-                    log_data.append(
-                        {
-                            "type": "chat",
-                            "timestamp": timestamp,
-                            "username": user,
-                            "message": message,
-                        }
+                    push_log_entry(
+                        vm_log_directory,
+                        "chat",
+                        username=user,
+                        message=message,
                     )
-                    
-                    with open(daily_log_path, "w") as log_file:
-                        json.dump(log_data, log_file, indent=4)
 
                     if config.commands["enabled"] and message.startswith(
                         config.commands["prefix"]
@@ -458,35 +462,12 @@ async def connect(vm_obj: dict):
                         log.info(
                             f"[{log_label}] It's now {current_turn}'s turn. Queue: {queue}"
                         )
-
-                        utc_now = datetime.now(timezone.utc)
-                        utc_day = utc_now.strftime("%Y-%m-%d")
-                        timestamp = utc_now.isoformat()
-
-                        # Get daily log file path
-                        daily_log_path = os.path.join(vm_log_directory, f"{utc_day}.json")
-                        
-                        # Load existing log data or create new
-                        if os.path.exists(daily_log_path):
-                            with open(daily_log_path, "r") as log_file:
-                                try:
-                                    log_data = json.load(log_file)
-                                except json.JSONDecodeError:
-                                    log_data = []
-                        else:
-                            log_data = []
-
-                        log_data.append(
-                            {
-                                "type": "turn",
-                                "timestamp": timestamp,
-                                "active_turn_user": current_turn,
-                                "queue": queue,
-                            }
+                        push_log_entry(
+                            vm_log_directory,
+                            "turn",
+                            active_turn_user=current_turn,
+                            queue=queue,
                         )
-                        
-                        with open(daily_log_path, "w") as log_file:
-                            json.dump(log_data, log_file, indent=4)
 
                 case ["remuser", count, *list]:
                     for i in range(int(count)):
@@ -510,8 +491,11 @@ async def connect(vm_obj: dict):
                         f"({STATE.name} - {log_label}) Moderator authentication succeeded with provided password and permissions {permissions}"
                     )
                 case ["admin", "19", username, ip]:
-                    log.info(
-                        f"({STATE.name} - {log_label}) User '{username}' is IP {ip}"
+                    push_log_entry(
+                        vm_log_directory,
+                        "ip",
+                        username=username,
+                        ip=ip,
                     )
                 case _:
                     if decoded is not None:
