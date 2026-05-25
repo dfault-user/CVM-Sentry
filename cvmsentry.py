@@ -413,6 +413,8 @@ async def connect(vm_obj: dict):
                             log.info(
                                 f"[{log_label}] User '{user}' connected with rank {rank.name}."
                             )
+                            await send_guac(websocket, "admin", "19", user)
+                            await asyncio.sleep(0)
                 case ["turn", _, "0"]:
                     if STATE < CollabVMState.LOGGED_IN:
                         continue
