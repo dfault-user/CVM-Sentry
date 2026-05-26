@@ -404,6 +404,8 @@ async def connect(vm_obj: dict):
                         rank = CollabVMRank(int(list[i * 2 + 1]))
 
                         if user in vms[log_label]["users"]:
+                            if user == vm_botuser[log_label]:
+                                vms[log_label]["self_rank"] = rank
                             vms[log_label]["users"][user]["rank"] = rank
                             log.info(
                                 f"[{log_label}] User '{user}' rank updated to {rank.name}."
@@ -418,7 +420,6 @@ async def connect(vm_obj: dict):
                                 "user_join",
                                 username=user,
                             )
-                            print(vms[log_label]["self_rank"])
                             if vms[log_label]["self_rank"] is (CollabVMRank.Admin or CollabVMRank.Mod):
                                 await send_guac(websocket, "admin", "19", user)
                             await asyncio.sleep(0)
