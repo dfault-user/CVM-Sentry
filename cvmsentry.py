@@ -420,7 +420,7 @@ async def connect(vm_obj: dict):
                                 "user_join",
                                 username=user,
                             )
-                            if vms[log_label]["self_rank"] is (CollabVMRank.Admin or CollabVMRank.Mod):
+                            if STATE == CollabVMState.LOGGED_IN and vm_obj.get("auth") is not None:
                                 await send_guac(websocket, "admin", "19", user)
                             await asyncio.sleep(0)
                 case ["turn", _, "0"]:
