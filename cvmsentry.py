@@ -418,6 +418,7 @@ async def connect(vm_obj: dict):
                                 "user_join",
                                 username=user,
                             )
+                            print(vms[log_label]["self_rank"])
                             if vms[log_label]["self_rank"] is (CollabVMRank.Admin or CollabVMRank.Mod):
                                 await send_guac(websocket, "admin", "19", user)
                             await asyncio.sleep(0)
