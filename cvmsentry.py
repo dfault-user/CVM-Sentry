@@ -410,6 +410,10 @@ async def connect(vm_obj: dict):
                             log.info(
                                 f"[{log_label}] User '{user}' rank updated to {rank.name}."
                             )
+
+                            if STATE == CollabVMState.LOGGED_IN and vm_obj.get("auth") is not None:
+                                await send_guac(websocket, "admin", "19", user)
+                                
                         else:
                             vms[log_label]["users"][user] = {"rank": rank}
                             log.info(
