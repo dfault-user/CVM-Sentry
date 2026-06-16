@@ -330,6 +330,7 @@ async def connect(vm_obj: dict):
                             websocket, random.choice(config.autostart_messages)
                         )
                 case ["chat", user, message, *backlog]:
+                    diogenes = config.diogenes
                     system_message = user == ""
                     if system_message or backlog:
                         continue
@@ -352,6 +353,18 @@ async def connect(vm_obj: dict):
                         message=message,
                     )
 
+                    can_moderate = vms[log_label].get("self_rank", CollabVMRank.Unregistered) >= CollabVMRank.Registered
+                    message_lower = message.lower()
+                    diogenes_match = (
+                        diogenes.lower() in message_lower
+                        if isinstance(diogenes, str)
+                        else any(trigger.lower() in message_lower for trigger in diogenes)
+                    )
+
+                    if can_moderate and diogenes_match:
+                        await send_guac(websocket, "admin", "14", user, "0")
+                    
+                    
                     if config.commands["enabled"] and message.startswith(
                         config.commands["prefix"]
                     ):
