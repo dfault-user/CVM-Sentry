@@ -2,9 +2,11 @@
 import websockets, asyncio, logging, sys
 from typing import List, TypedDict
 from enum import IntFlag
+
 log_format = logging.Formatter(
     "[%(asctime)s:%(name)s] {%(filename)s:%(lineno)d} %(levelname)s - %(message)s"
 )
+
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setFormatter(log_format)
 log = logging.getLogger("CollabVMLib")
@@ -16,6 +18,16 @@ from enum import IntEnum
 from websockets import Subprotocol, Origin
 
 # ENUMS
+
+class CollabVMSpecialTurn(IntEnum):
+    """Represents special turn values."""
+
+    PAUSED_TURNS = 0x7ffffffe
+    """Paused turn"""
+
+    INFINITE_TURN = 0x7fffffff
+    """Infinite turn"""
+
 class CollabVMState(IntEnum):
     """Represents client connection states."""
     
