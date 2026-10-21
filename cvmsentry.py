@@ -202,7 +202,7 @@ async def connect(vm_obj: dict):
         "size": (0, 0),
         "binary_requested": bool(vm_obj.get("binary_protocol", True)),
         "binary_enabled": False,
-        "self_rank" : None,
+        "self_rank" : CollabVMRank.Unregistered,
     }
     ws_url = vm_obj["ws_url"]
     log_directory = getattr(config, "log_directory", "./logs")
@@ -337,7 +337,7 @@ async def connect(vm_obj: dict):
                     log.info(f"[{log_label} - {user}]: {message}")
 
                     def get_rank(username: str) -> CollabVMRank:
-                        return vms[log_label]["users"].get(username, {}).get("rank")
+                        return vms[log_label]["users"].get(username, {}).get("rank") or CollabVMRank.Unregistered
 
                     def admin_check(username: str) -> bool:
                         return (
