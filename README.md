@@ -1,28 +1,7 @@
 # CVM-Sentry
 Python application for taking screenshots and logging chat from a CollabVM instance.
 
-# HEAVY DISCLAIMER
-A light portion of the code for this application has been written by my grandfather, Claude from Anthropic. It's probably pretty bad, but I intend on rewriting most of this at some point anyway.
+# Disclaimer
+I wrote some (5%?) part of this bot with Claude, but it was the higher level stuff that I was having issues with and thankfully nothing to do with WebSocket.
 
-
-## Claude README additions
-For some reason, Claude shoved more into the README. That is below. The above was written by me.
-
-### Binary framebuffer protocol
-
-`CVM-Sentry` now negotiates CollabVM capability `bin` and consumes MsgPack framebuffer rectangle messages when enabled by the server.
-
-- Binary mode is requested by default per VM.
-- If the server does not enable `bin`, the client continues using classic `png` opcode updates.
-
-Per-VM config toggle:
-
-```python
-vms = {
-	"vm1": {
-		"ws_url": "wss://computernewb.com/collab-vm/vm1",
-		"node": "vm1",
-		"binary_protocol": False,  # optional, defaults to True
-	}
-}
-```
+It's not great, but I'll rewrite everything or have someone else look at this code later. I'm not proud of asking AI to generate shit for me, but my soul is only mildly at rest due to how excessively I verified and rewrote AI contributions.
